@@ -35,20 +35,12 @@ void setup() {
 }
 
 //-------------BEFORE LOOP----------------//
-
-uint64_t rect_c, start= millis();
-bool render_frametime = false;
-int frametime = 0;
-char string_buffer[3];
-const unsigned int interval = 500;
-const unsigned int duration = 5000;
-
+uint64_t start = millis();
 //-------------BEFORE LOOP----------------//
-//-------------SETTINGS----------------//
 
-const int init_square_size = 20;
-const int f_square_size = 50;
-int square_size = init_square_size;
+
+//-------------SETTINGS----------------//
+bool render_frametime = false;
 //-------------SETTINGS----------------//
 
 
@@ -62,15 +54,8 @@ void loop() {
       canvas.setTextWrap(false);
       canvas.print(millis()-start);
     }
-    if(square_size < f_square_size){
-      square_size = clamp(lerp(init_square_size, f_square_size, mapM(millis()-rect_c, 0, duration, 0, 1)), init_square_size, f_square_size);
-      
-    }else{
-      square_size = init_square_size;
-      rect_c = millis();
-    }
     
-    canvas.drawRect(64-round((square_size/2)),32-round((square_size/2)),square_size,square_size, ST7735_RED);
+    
 
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
 }  
