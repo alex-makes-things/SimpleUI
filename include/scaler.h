@@ -25,7 +25,8 @@ pair<unsigned int, unsigned int> scale(const uint16_t* input, int width, int hei
     return newsize;
 }
 
-/*
+/*  USAGE EXAMPLE:
+
     float scaling_factor = 0.25;
     pair<float,float> imsize = {128, 64};
     int arraysize = int(floor((imsize.first*scaling_factor)*(imsize.second*scaling_factor)));
