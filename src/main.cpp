@@ -4,6 +4,7 @@
 #include <SPI.h>
 #include "nicerlandscape.h"
 #include <scaler.h>
+#include <images/home_images.h>
 
 #define SDA 21
 #define SCL 22
