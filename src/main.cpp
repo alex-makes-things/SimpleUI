@@ -19,6 +19,7 @@ GFXcanvas16 canvas = GFXcanvas16(128,64);
 
 
 //-----------FUNCTION PROTOTYPES----------------//
+
 void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h);
 float mapM(float x, float in_min, float in_max, float out_min, float out_max);
 void loadingBar(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t startTime, uint16_t duration, uint16_t color);
@@ -26,6 +27,7 @@ int lerp(float v0, float v1, float t);
 float lerpF(float v0, float v1, float t);
 float clamp(float n, float min, float max);
 void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling, uint16_t color);
+
 //-----------FUNCTION PROTOTYPES----------------//
 
 
@@ -67,6 +69,10 @@ void loop() {
 }  
 
 
+
+
+
+
 /**************************************************************************/
 /*!
    @brief      Draw a scaled monochrome bitmap to the universal canvas
@@ -85,6 +91,16 @@ void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling,
   canvas.drawBitmap(x,y, output, imagesize.first, imagesize.second, color);
   delete[] output;
 }
+/**************************************************************************/
+/*!
+   @brief      A blazingly fast method for drawing an RGB bitmap to the screen
+    @param    x   Top left corner x coordinate
+    @param    y   Top left corner y coordinate
+    @param    bitmap  byte array with monochrome bitmap
+    @param    w   Width of bitmap in pixels
+    @param    h   Height of bitmap in pixels
+*/
+/**************************************************************************/
 void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
 {
   tft.startWrite();
