@@ -25,6 +25,7 @@ void loadingBar(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t startTi
 int lerp(float v0, float v1, float t);
 float lerpF(float v0, float v1, float t);
 float clamp(float n, float min, float max);
+void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling, uint16_t color);
 //-----------FUNCTION PROTOTYPES----------------//
 
 
@@ -45,9 +46,7 @@ static bool isDone = false;
 
 //-------------SETTINGS----------------//
 bool render_frametime = false;
-float init_scaling = 0.1;
-float scaling_factor = 0.1;
-float duration = 5000;
+static float scaling_factor = 0.7;
 //-------------SETTINGS----------------//
 
 
@@ -61,32 +60,31 @@ void loop() {
       canvas.setTextWrap(false);
       canvas.print(millis()-start);
     }
-
-    if(scaling_factor < 1 && isDone == false){
-      scaling_factor = lerpF(init_scaling, 1, mapM(millis()-lerptime, 0, duration, 0, 1));
-      Serial.println(scaling_factor);
-    }else if (isDone && millis()-pauseT>=1000){
-      isDone = false;
-      scaling_factor = init_scaling;
-      lerptime = millis();
-    }else if (scaling_factor>0.99 && isDone == false){
-      pauseT = millis();
-      scaling_factor = 1;
-      isDone = true;
-      Serial.println("Finished");
-    }
-
-    int arraysize = int(floor((NICERLANDSCAPE_WIDTH*scaling_factor)*(NICERLANDSCAPE_HEIGHT*scaling_factor)));
-    uint16_t* output = new uint16_t[arraysize];
-    pair<unsigned int, unsigned int> imagesize = scale(nicerlandscape, NICERLANDSCAPE_WIDTH, NICERLANDSCAPE_HEIGHT, output, scaling_factor);
-    canvas.drawRGBBitmap(0,0, output, imagesize.first, imagesize.second);
-    delete[] output;
+    
+    renderBmp8(46,14,home_large_test, HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, scaling_factor, 0xffff);
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
     start = millis();
 }  
 
 
-
+/**************************************************************************/
+/*!
+   @brief      Draw a scaled monochrome bitmap to the universal canvas
+    @param    x   Top left corner x coordinate
+    @param    y   Top left corner y coordinate
+    @param    image  byte array with monochrome bitmap
+    @param    w   Width of bitmap in pixels
+    @param    h   Height of bitmap in pixels
+    @param    scaling Scaling factor of the bitmap
+    @param    color 16-bit color with which the bitmap should be drawn
+*/
+/**************************************************************************/
+void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling, uint16_t color){
+  uint8_t* output = new uint8_t[getArrSize8(w, h, scaling)];
+  pair<unsigned int, unsigned int> imagesize = scale(image, w, h, output, scaling);
+  canvas.drawBitmap(x,y, output, imagesize.first, imagesize.second, color);
+  delete[] output;
+}
 void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
 {
   tft.startWrite();
