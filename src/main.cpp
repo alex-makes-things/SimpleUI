@@ -12,6 +12,9 @@
 #define RST 17
 #define SCREENHEIGHT 64
 #define SCREENWIDTH 128
+const float EPSILON = 0.01; //The epsilon is needed because of floating point precision, and we need a tolerance margin, so sometimes "==" wouldn't work
+
+
 
 SPIClass spi = SPIClass(VSPI);
 Adafruit_ST7735 tft = Adafruit_ST7735(&spi, -1, DC, RST);
@@ -30,13 +33,63 @@ void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling,
 
 //-----------FUNCTION PROTOTYPES----------------//
 
+struct Animator{
+  bool isDone = false;   //Signals if the animation is complete or not
+  bool looping = false;  //Makes the animation loop
+  bool reverse = false;  //"Inverts" the final and initial values, (just in the calculations)
+  unsigned int duration; //How long the animation takes to go from initial to final and viceversa
+  float initial;
+  float final;
+  float progress = (reverse) ? final : initial;  //The progress is ultimately the output of the structure, which lies clamped in between initial and final
+  uint64_t currentTime = millis();   //This is needed for the temporal aspect of the interpolation
+  Animator(float i, float f, unsigned int d, bool loop){  //Basic constructor
+    duration = d;
+    initial = i;
+    final = f;
+    looping = loop;
+  }
+  void update(){
+    if(reverse)  //Not the most efficient way, but this makes sure that we execute the right code whether the animation is reversed or not
+    {
+      if(fabs(progress-initial)>=EPSILON && isDone == false){
+        progress = clamp(lerpF(initial, final, fabs(1-mapM(millis()-currentTime, 0, duration, 0, 1))), initial, final);
+      }else if(isDone==false && fabs(progress - initial) < EPSILON)  //Declares the animation as done and rounds the progress to the final amount
+      {
+        isDone = true;
+        progress = initial;
+      }
+    }
+    else{
+      if(fabs(progress-final)>=EPSILON && isDone == false){  
+        progress = clamp(lerpF(initial, final, mapM(millis()-currentTime, 0, duration, 0, 1)), initial, final);  
+      }else if(isDone==false && fabs(progress - final) < EPSILON)
+      {
+        isDone = true;
+        progress = final;
+      }
+    }
 
+    if(isDone && looping){  //Independent check that loops the animation by resetting the done status, progress, and internal timing.
+      isDone = false;
+      progress = (reverse) ? final : initial;
+      currentTime = millis();
+    }
+  }
+
+  void invert(){ //Function that can be called at runtime which inverts the direction of the interpolation
+    //WORK IN PROGRESS
+    reverse = !reverse;
+  }
+};
+
+Animator playTest = Animator(0.1, 1, 5000, true);
 void setup() {
   Serial.begin(115200);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
+  playTest.reverse = false;
 }
 
 //-------------BEFORE LOOP----------------//
@@ -48,7 +101,10 @@ static bool isDone = false;
 
 //-------------SETTINGS----------------//
 bool render_frametime = false;
-static float scaling_factor = 0.7;
+static float scaling_factor = 0.7f;
+
+
+
 //-------------SETTINGS----------------//
 
 
@@ -63,7 +119,8 @@ void loop() {
       canvas.print(millis()-start);
     }
     
-    renderBmp8(46,14,home_large_test, HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, scaling_factor, 0xffff);
+    playTest.update();
+    renderBmp8(46,14,home_large_test, HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, playTest.progress, 0xffff);
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
     start = millis();
 }  
