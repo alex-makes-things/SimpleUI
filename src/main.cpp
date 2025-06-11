@@ -3,7 +3,7 @@
 #include <Adafruit_ST7735.h>
 #include <SPI.h>
 #include "nicerlandscape.h"
-#include <scaler.h>
+#include <ImageAssist.h>
 #include <images/home_images.h>
 
 #define SDA 21
@@ -24,12 +24,6 @@ GFXcanvas16 canvas = GFXcanvas16(128,64);
 //-----------FUNCTION PROTOTYPES----------------//
 
 void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h);
-float mapM(float x, float in_min, float in_max, float out_min, float out_max);
-void loadingBar(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t startTime, uint16_t duration, uint16_t color);
-int lerp(float v0, float v1, float t);
-float lerpF(float v0, float v1, float t);
-float clamp(float n, float min, float max);
-void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling, uint16_t color);
 void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color);
 
 //-----------FUNCTION PROTOTYPES----------------//
@@ -53,7 +47,7 @@ struct Animator{
     if(reverse)  //Not the most efficient way, but this makes sure that we execute the right code whether the animation is reversed or not
     {
       if(fabs(progress-initial)>=EPSILON && isDone == false){
-        progress = clamp(lerpF(initial, final, fabs(1-mapM(millis()-currentTime, 0, duration, 0, 1))), initial, final);
+        progress = clamp(lerpF(initial, final, fabs(1-mapF(millis()-currentTime, 0, duration, 0, 1))), initial, final);
       }else if(isDone==false && fabs(progress - initial) < EPSILON)  //Declares the animation as done and rounds the progress to the final amount
       {
         isDone = true;
@@ -62,7 +56,7 @@ struct Animator{
     }
     else{
       if(fabs(progress-final)>=EPSILON && isDone == false){  
-        progress = clamp(lerpF(initial, final, mapM(millis()-currentTime, 0, duration, 0, 1)), initial, final);  
+        progress = clamp(lerpF(initial, final, mapF(millis()-currentTime, 0, duration, 0, 1)), initial, final);  
       }else if(isDone==false && fabs(progress - final) < EPSILON)
       {
         isDone = true;
@@ -105,8 +99,6 @@ static bool isDone = false;
 bool render_frametime = false;
 static float scaling_factor = 0.7f;
 
-
-
 //-------------SETTINGS----------------//
 
 
@@ -122,8 +114,6 @@ void loop() {
     }
     
     playTest.update();
-    //renderBmp8(46,14,playIcon.data.get(), playIcon.width, playIcon.height, playTest.progress, 0xffff);
-    //canvas.drawBitmap(46,14,playIcon.data, playIcon.width, playIcon.height, 0xffff);
     renderBmp8(46,14, playIcon, playTest.progress, 0xffff);
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
     start = millis();
@@ -133,26 +123,17 @@ void loop() {
 
 /**************************************************************************/
 /*!
-   @brief      Draw a scaled monochrome bitmap to the universal canvas
+   @brief      Easily render a scaled monochrome bitmap to the screen, memory managed.
     @param    x   Top left corner x coordinate
     @param    y   Top left corner y coordinate
-    @param    image  byte array with monochrome bitmap
-    @param    w   Width of bitmap in pixels
-    @param    h   Height of bitmap in pixels
+    @param    img  Image8 object containing the byte array and size
     @param    scaling Scaling factor of the bitmap
     @param    color 16-bit color with which the bitmap should be drawn
 */
 /**************************************************************************/
-void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling, uint16_t color){
-  uint8_t* output = new uint8_t[getArrSize8(w, h, scaling)];
-  pair<unsigned int, unsigned int> imagesize = scale(image, w, h, output, scaling);
-  canvas.drawBitmap(x,y, output, imagesize.first, imagesize.second, color);
-  delete[] output;
-}
 void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color){
   Image8 scaled = scale(img, scaling);
-  canvas.drawBitmap(x,y, scaled.data, scaled.width, scaled.height, color);
-  delete[] scaled.data;
+  canvas.drawBitmap(x,y, scaled.data.get(), scaled.width, scaled.height, color);
 }
 /**************************************************************************/
 /*!
@@ -171,25 +152,4 @@ void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
   tft.writePixels(bitmap, w*h, false);
   tft.endWrite();
 }
-float mapM(float x, float in_min, float in_max, float out_min, float out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-void loadingBar(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t startTime, uint16_t duration, uint16_t color){
-  canvas.drawRect(x, y, w, h, color);
-  int load_progress = micros() - startTime;  
-  if(load_progress < duration*1000){
-    float progress = (float)load_progress / (duration * 1000);  // Smooth 0 to 1 scaling
-    int bar_width = (int)(progress * (float)w);  // Scale to bar size
-    canvas.fillRect(x, y, bar_width, h, color);
-  }
-}
-int lerp(float v0, float v1, float t) {
-  return int(round((1 - t) * v0 + t * v1));
-}
-float lerpF(float v0, float v1, float t) {
-  return (1 - t) * v0 + t * v1;
-}
-float clamp(float n, float min, float max) {
-  return std::max(min, std::min(n, max));
-}
+
