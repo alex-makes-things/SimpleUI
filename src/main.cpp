@@ -30,6 +30,7 @@ int lerp(float v0, float v1, float t);
 float lerpF(float v0, float v1, float t);
 float clamp(float n, float min, float max);
 void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling, uint16_t color);
+void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color);
 
 //-----------FUNCTION PROTOTYPES----------------//
 
@@ -81,7 +82,7 @@ struct Animator{
     reverse = !reverse;
   }
 };
-
+Image8 playIcon(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE);
 Animator playTest = Animator(0.1, 1, 5000, true);
 void setup() {
   Serial.begin(115200);
@@ -89,12 +90,13 @@ void setup() {
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
+  playIcon.setSize(180);
+  playIcon.setData(home_large_test);
   playTest.reverse = false;
 }
 
 //-------------BEFORE LOOP----------------//
-uint64_t start, lerptime = millis();
-uint64_t pauseT = 0;
+uint64_t start = millis();
 static bool isDone = false;
 //-------------BEFORE LOOP----------------//
 
@@ -120,13 +122,12 @@ void loop() {
     }
     
     playTest.update();
-    renderBmp8(46,14,home_large_test, HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, playTest.progress, 0xffff);
+    //renderBmp8(46,14,playIcon.data.get(), playIcon.width, playIcon.height, playTest.progress, 0xffff);
+    //canvas.drawBitmap(46,14,playIcon.data, playIcon.width, playIcon.height, 0xffff);
+    renderBmp8(46,14, playIcon, playTest.progress, 0xffff);
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
     start = millis();
 }  
-
-
-
 
 
 
@@ -147,6 +148,11 @@ void renderBmp8(int x, int y, const uint8_t *image, int w, int h, float scaling,
   pair<unsigned int, unsigned int> imagesize = scale(image, w, h, output, scaling);
   canvas.drawBitmap(x,y, output, imagesize.first, imagesize.second, color);
   delete[] output;
+}
+void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color){
+  Image8 scaled = scale(img, scaling);
+  canvas.drawBitmap(x,y, scaled.data, scaled.width, scaled.height, color);
+  delete[] scaled.data;
 }
 /**************************************************************************/
 /*!

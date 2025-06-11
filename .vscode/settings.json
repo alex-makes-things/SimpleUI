@@ -294,6 +294,8 @@
     "streambuf": "cpp",
     "random": "cpp",
     "array": "cpp",
-    "map": "cpp"
+    "map": "cpp",
+    "functional": "cpp",
+    "memory": "cpp"
   }
 }
