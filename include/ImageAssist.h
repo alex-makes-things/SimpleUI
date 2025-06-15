@@ -28,7 +28,7 @@ struct Image8{
     unsigned int width, height;
     size_t dataSize = 0;
     std::shared_ptr<uint8_t> data;
-    Image8(unsigned int w, unsigned int h) : width(w), height(h) {}
+    Image8(unsigned int w=0, unsigned int h=0) : width(w), height(h) {}
     void setSize(unsigned int s){
         dataSize = s;
         data = std::shared_ptr<uint8_t>(new uint8_t[dataSize], std::default_delete<uint8_t[]>());
