@@ -16,11 +16,16 @@ class Animator{
   bool looping = false;  //Makes the animation loop if true
   bool reverse = false;  //"Inverts" the final and initial values, (just in the calculations)
   bool breathing = false;
+  bool bounce_done = false;
   unsigned int duration; //How long the animation takes to go from initial to final and viceversa
   float initial;
   float final;
   float progress;  //The progress is ultimately the output of the structure, which lies clamped in between initial and final
   uint64_t currentTime = millis();   //This is needed for the temporal aspect of the interpolation
+  void invert(){ //Function that can be called at runtime which inverts the direction of the interpolation
+    //WORK IN PROGRESS
+    reverse = !reverse;
+  }
   public:
   Animator(float i=0, float f=0, unsigned int d=0){  //Basic constructor
     duration = d;
@@ -30,16 +35,25 @@ class Animator{
   }
 
   void update(){
+    //Breathing feature snippet
     if(breathing&&isDone){
       if(looping){
         invert();
-      }else if(progress==final){
+        bounce_done = false;
+      }else if(progress==final&&(!bounce_done)){
         invert();
         isDone=false;
         currentTime = millis();
+        bounce_done = true;
+      }else if (reverse&&(progress==initial)&&(!bounce_done)){
+        invert();
+        isDone=false;
+        currentTime = millis();
+        bounce_done = true;
       }
     }
 
+    //Looping feature
     //Has to be before the actual update, otherwise you never know when the animation reached the target value.
     if(isDone && looping){  //Independent check that loops the animation by resetting the done status, progress, and internal timing.
       isDone = false;
@@ -47,6 +61,7 @@ class Animator{
       currentTime = millis();
     }
 
+    //Actual progress calculation
     if(reverse)  //Not the most efficient way, but this makes sure that we execute the right code whether the animation is reversed or not
     {
       if(fabs(progress-initial)>=EPSILON && isDone == false){
@@ -66,22 +81,24 @@ class Animator{
         progress = final;
       }
     }
-
-    
   }
-
-  void invert(){ //Function that can be called at runtime which inverts the direction of the interpolation
-    //WORK IN PROGRESS
-    reverse = !reverse;
-  }
-
   void setDuration(unsigned int d){duration = d;}
   void setInitial(unsigned int i){initial = i;}
   void setFinal(unsigned int f){final = f;}
   void setLoop(bool loop){looping = loop;}
   void setBreathing(bool breathe){breathing = breathe;}
+  void setReverse(bool rev){
+    reverse = rev;
+    progress = (progress==initial&&reverse) ? final : progress;
+  }
   float getProgress(){return progress;}
   bool getDone(){return isDone;}
+  void defaultModifiers(){
+    looping = false;
+    reverse = false;
+    breathing = false;
+    bounce_done = false;
+  }
 };
 
 
