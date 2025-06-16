@@ -15,19 +15,38 @@ class Animator{
   bool isDone = false;   //Signals if the animation is complete or not
   bool looping = false;  //Makes the animation loop if true
   bool reverse = false;  //"Inverts" the final and initial values, (just in the calculations)
+  bool breathing = false;
   unsigned int duration; //How long the animation takes to go from initial to final and viceversa
   float initial;
   float final;
-  float progress = 1;  //The progress is ultimately the output of the structure, which lies clamped in between initial and final
+  float progress;  //The progress is ultimately the output of the structure, which lies clamped in between initial and final
   uint64_t currentTime = millis();   //This is needed for the temporal aspect of the interpolation
   public:
   Animator(float i=0, float f=0, unsigned int d=0){  //Basic constructor
     duration = d;
     initial = i;
     final = f;
+    progress = initial;
   }
 
   void update(){
+    if(breathing&&isDone){
+      if(looping){
+        invert();
+      }else if(progress==final){
+        invert();
+        isDone=false;
+        currentTime = millis();
+      }
+    }
+
+    //Has to be before the actual update, otherwise you never know when the animation reached the target value.
+    if(isDone && looping){  //Independent check that loops the animation by resetting the done status, progress, and internal timing.
+      isDone = false;
+      progress = (reverse) ? final : initial;
+      currentTime = millis();
+    }
+
     if(reverse)  //Not the most efficient way, but this makes sure that we execute the right code whether the animation is reversed or not
     {
       if(fabs(progress-initial)>=EPSILON && isDone == false){
@@ -48,11 +67,7 @@ class Animator{
       }
     }
 
-    if(isDone && looping){  //Independent check that loops the animation by resetting the done status, progress, and internal timing.
-      isDone = false;
-      progress = (reverse) ? final : initial;
-      currentTime = millis();
-    }
+    
   }
 
   void invert(){ //Function that can be called at runtime which inverts the direction of the interpolation
@@ -64,6 +79,7 @@ class Animator{
   void setInitial(unsigned int i){initial = i;}
   void setFinal(unsigned int f){final = f;}
   void setLoop(bool loop){looping = loop;}
+  void setBreathing(bool breathe){breathing = breathe;}
   float getProgress(){return progress;}
   bool getDone(){return isDone;}
 };
@@ -87,25 +103,25 @@ class UIElement{
 };
 
 class MonoImage : UIElement{
-    protected:
+  protected:
     Image8 body;
     float scale_fac=1;
     uint16_t color = 0xffff;
-    public:
+  public:
     Animator anim;
     MonoImage(const uint8_t* input, unsigned int w, unsigned int h, unsigned int posx, unsigned int posy):UIElement(w, h, posx, posy){
-        body = Image8(w,h);
-        body.setSize(ArrUtils::getArrSize8(body.width, body.height, 1.0f));
-        body.setData(input);
+        body = Image8(w,h,input);
     }
     void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
     void setScale(float scale){scale_fac = scale;}
-    void render(){
+    virtual void render(){
       anim.update();
       scale_fac = anim.getProgress();
       renderBmp8(x, y, body, scale_fac, color);
     }
 };
+
+//class MonoApp : MonoImage{};
 
 /**************************************************************************/
 /*!

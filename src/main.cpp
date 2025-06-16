@@ -11,6 +11,7 @@ void setup() {
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
   play.InitAnim(0.1, 1, 5000);
+  play.anim.setBreathing(true);
   play.anim.setLoop(true);
 }
 

@@ -29,6 +29,12 @@ struct Image8{
     size_t dataSize = 0;
     std::shared_ptr<uint8_t> data;
     Image8(unsigned int w=0, unsigned int h=0) : width(w), height(h) {}
+
+    Image8(unsigned int w, unsigned int h, const uint8_t* input) : width(w), height(h){
+        setSize(ArrUtils::getArrSize8(w,h,1.0f));
+        setData(input);
+    }
+
     void setSize(unsigned int s){
         dataSize = s;
         data = std::shared_ptr<uint8_t>(new uint8_t[dataSize], std::default_delete<uint8_t[]>());
@@ -37,6 +43,12 @@ struct Image8{
         assert(data);         // Ensure data is allocated
         assert(dataSize > 0); // Ensure size is valid
         std::copy(input, input + dataSize, data.get());
+    }
+    void setImg(Image8 img){
+        setSize(img.dataSize);
+        setData(img.data.get());
+        width = img.width;
+        height = img.height;
     }
 };
 
