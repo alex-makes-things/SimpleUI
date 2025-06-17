@@ -8,8 +8,6 @@ void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color);
 
 //-----------FUNCTION PROTOTYPES----------------//
 
-const float EPSILON = 0.01; //The epsilon is needed because of floating point precision, and we need a tolerance margin, so sometimes "==" wouldn't work
-
 class Animator{
   private:
   bool isDone = false;   //Signals if the animation is complete or not
@@ -17,71 +15,60 @@ class Animator{
   bool reverse = false;  //"Inverts" the final and initial values, (just in the calculations)
   bool breathing = false;
   bool bounce_done = false;
-  unsigned int duration; //How long the animation takes to go from initial to final and viceversa
+  unsigned int duration; //How long the animation takes to go from initial to final and viceversa, input as ms but converted to us
   float initial;
   float final;
   float progress;  //The progress is ultimately the output of the structure, which lies clamped in between initial and final
-  uint64_t currentTime = millis();   //This is needed for the temporal aspect of the interpolation
+  uint64_t currentTime = micros();   //This is needed for the temporal aspect of the interpolation
+  unsigned int elapsed = 0;
   void invert(){ //Function that can be called at runtime which inverts the direction of the interpolation
-    //WORK IN PROGRESS
     reverse = !reverse;
   }
   public:
   Animator(float i=0, float f=0, unsigned int d=0){  //Basic constructor
-    duration = d;
+    duration = d*1000;
     initial = i;
     final = f;
     progress = initial;
   }
 
   void update(){
-    //Breathing feature snippet
-    if(breathing&&isDone){
+    uint64_t now = micros();
+    elapsed = clamp(now-currentTime, 0, duration);
+    if(isDone){
+      if(breathing){
+        if(looping){
+          invert();
+          bounce_done = false;
+          now, currentTime = micros();
+          elapsed = 0;
+        } else if (!bounce_done){
+          invert();
+          isDone=false;
+          now, currentTime = micros();
+          elapsed = 0;
+          bounce_done = true;
+        }
+      }
       if(looping){
-        invert();
-        bounce_done = false;
-      }else if(progress==final&&(!bounce_done)){
-        invert();
-        isDone=false;
-        currentTime = millis();
-        bounce_done = true;
-      }else if (reverse&&(progress==initial)&&(!bounce_done)){
-        invert();
-        isDone=false;
-        currentTime = millis();
-        bounce_done = true;
+        progress = (reverse) ? final : initial; 
+        isDone = false;
+        currentTime = micros();
       }
     }
 
-    //Looping feature
-    //Has to be before the actual update, otherwise you never know when the animation reached the target value.
-    if(isDone && looping){  //Independent check that loops the animation by resetting the done status, progress, and internal timing.
-      isDone = false;
-      progress = (reverse) ? final : initial;
-      currentTime = millis();
+    if(!isDone){
+      if (elapsed<duration){
+        float t = (reverse) ? clamp(fabs(1-mapF(elapsed, 0, duration, 0, 1)),0,1) : clamp(mapF(elapsed, 0, duration, 0, 1),0,1);
+        progress = lerpF(initial, final, t);
+        } else {
+          isDone = true;
+          progress = (reverse) ? initial : final;
+        }
     }
-
-    //Actual progress calculation
-    if(reverse)  //Not the most efficient way, but this makes sure that we execute the right code whether the animation is reversed or not
-    {
-      if(fabs(progress-initial)>=EPSILON && isDone == false){
-        progress = clamp(lerpF(initial, final, fabs(1-mapF(millis()-currentTime, 0, duration, 0, 1))), initial, final);
-      }else if(isDone==false && fabs(progress - initial) < EPSILON)  //Declares the animation as done and rounds the progress to the final amount
-      {
-        isDone = true;
-        progress = initial;
-      }
-    }
-    else{
-      if(fabs(progress-final)>=EPSILON && isDone == false){  
-        progress = clamp(lerpF(initial, final, mapF(millis()-currentTime, 0, duration, 0, 1)), initial, final);  
-      }else if(isDone==false && fabs(progress - final) < EPSILON)
-      {
-        isDone = true;
-        progress = final;
-      }
-    }
+    
   }
+
   void setDuration(unsigned int d){duration = d;}
   void setInitial(unsigned int i){initial = i;}
   void setFinal(unsigned int f){final = f;}
@@ -152,10 +139,11 @@ class MonoImage : UIElement{
 /**************************************************************************/
 void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color){
   if(scaling != 1){
-    Image8 scaled = scale(img, scaling);
-    canvas.drawBitmap(x,y, scaled.data.get(), scaled.width, scaled.height, color);
+    //Image8 scaled = scale(img, scaling);
+    std::shared_ptr<Image8> scaled = scale(img, scaling);
+    canvas.drawBitmap(x,y, scaled->data, scaled->width, scaled->height, color);
   }else{
-    canvas.drawBitmap(x,y, img.data.get(), img.width, img.height, color);
+    canvas.drawBitmap(x,y, img.data, img.width, img.height, color);
   }
   
 }

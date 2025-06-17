@@ -10,7 +10,7 @@ void setup() {
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
-  play.InitAnim(0.1, 1, 5000);
+  play.InitAnim(0.1, 1, 2500);
   play.anim.setBreathing(true);
   play.anim.setLoop(true);
 }
@@ -35,7 +35,9 @@ void loop() {
       canvas.print(millis()-start);
     }
   
+  
     play.render();
+    //Serial.println(play.anim.getProgress());
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
     start = millis();
 }  

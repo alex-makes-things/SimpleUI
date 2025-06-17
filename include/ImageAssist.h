@@ -9,8 +9,6 @@
 #include <iterator>
 
 
-
-
 namespace ArrUtils{
     int getArrSize8(int width, int height, float scale_fac) {
         int w = int(floor(width * scale_fac));
@@ -24,47 +22,64 @@ namespace ArrUtils{
     }
 }
 
+
 struct Image8{
-    unsigned int width, height;
     size_t dataSize = 0;
-    std::shared_ptr<uint8_t> data;
+    unsigned int width = 0;
+    unsigned int height = 0;
+    uint8_t* data = nullptr;
     Image8(unsigned int w=0, unsigned int h=0) : width(w), height(h) {}
 
-    Image8(unsigned int w, unsigned int h, const uint8_t* input) : width(w), height(h){
+    Image8(unsigned int w, unsigned int h, uint8_t* input) : width(w), height(h){
         setSize(ArrUtils::getArrSize8(w,h,1.0f));
         setData(input);
     }
 
+    Image8(unsigned int w, unsigned int h, const uint8_t* input) : width(w), height(h){
+        setSize(ArrUtils::getArrSize8(w,h,1.0f));
+        data = (uint8_t*)input;
+    }
+
     void setSize(unsigned int s){
         dataSize = s;
-        data = std::shared_ptr<uint8_t>(new uint8_t[dataSize], std::default_delete<uint8_t[]>());
     }
-    void setData(const uint8_t* input) {
-        assert(data);         // Ensure data is allocated
-        assert(dataSize > 0); // Ensure size is valid
-        std::copy(input, input + dataSize, data.get());
+    void setData(uint8_t* input) {
+        data = input;
     }
-    void setImg(Image8 img){
-        setSize(img.dataSize);
-        setData(img.data.get());
-        width = img.width;
-        height = img.height;
+    void setImg(unsigned int w, unsigned int h, uint8_t* d) {
+        width = w;
+        height = h;
+        data = d;
     }
 };
 
 struct Image16{
-    unsigned int width, height;
     size_t dataSize = 0;
-    std::shared_ptr<uint16_t> data;
-    Image16(unsigned int w, unsigned int h) : width(w), height(h) {}
+    unsigned int width = 0;
+    unsigned int height = 0;
+    uint16_t* data = nullptr;
+    Image16(unsigned int w=0, unsigned int h=0) : width(w), height(h) {}
+
+    Image16(unsigned int w, unsigned int h, uint16_t* input) : width(w), height(h){
+        setSize(ArrUtils::getArrSize8(w,h,1.0f));
+        setData(input);
+    }
+
+    Image16(unsigned int w, unsigned int h, const uint16_t* input) : width(w), height(h){
+        setSize(ArrUtils::getArrSize16(w,h,1.0f));
+        data = (uint16_t*)input;
+    }
+
     void setSize(unsigned int s){
         dataSize = s;
-        data = std::shared_ptr<uint16_t>(new uint16_t[dataSize], std::default_delete<uint16_t[]>());
     }
-    void setData(const uint16_t* input) {
-        assert(data);         // Ensure data is allocated
-        assert(dataSize > 0); // Ensure size is valid
-        std::copy(input, input + dataSize, data.get());
+    void setData(uint16_t* input) {
+        data = input;
+    }
+    void setImg(unsigned int w, unsigned int h, uint16_t* d) {
+        width = w;
+        height = h;
+        data = d;
     }
 };
 
@@ -72,118 +87,71 @@ float mapF(float x, float in_min, float in_max, float out_min, float out_max);
 int lerp(float v0, float v1, float t);
 float lerpF(float v0, float v1, float t);
 float clamp(float n, float min, float max);
-Image16 scale(Image16 input, float scaling_factor);
-Image8 scale(Image8 input, float scaling_factor);
+std::shared_ptr<Image16> scale(Image16 input, float scaling_factor);
+std::shared_ptr<Image8> scale(Image8 input, float scaling_factor);
 
-//Deprecated functions
-std::pair<unsigned const int, unsigned const int> scale(const uint16_t* input, int width, int height, uint16_t* result, float scaling_factor){
-    unsigned int count = 0;
-    unsigned const int newwidth = floor(width*scaling_factor);
-    unsigned const int newheight = floor(height*scaling_factor);
-    for(unsigned int b=0; b < newheight; b++){
-        for(unsigned int i=0; i < newwidth; i++){
-            unsigned const int scaled_h = floor(b/scaling_factor);
-            unsigned const int scaled_w = floor(i/scaling_factor);
-            result[count] = input[(scaled_h * width) + scaled_w];
-            count++;
-        }
+auto scaled_image16_deleter = [](Image16* img) {
+    if (img) {
+        delete[] img->data;  // delete the raw array
+        delete img;          // delete the Image8 object itself
     }
-    std::pair<unsigned const int, unsigned const int> newsize = {newwidth, newheight};
-    return newsize;
-}
-std::pair<unsigned const int, unsigned const int> scale(const uint8_t* input, int width, int height, uint8_t* result, float scaling_factor){
-    unsigned const int newwidth  = floor(width * scaling_factor);
-    unsigned const int newheight = floor(height * scaling_factor);
-    const int in_row_bytes  = (width + 7) / 8;
-    const int out_row_bytes = (newwidth + 7) / 8;
-    // Clear the output buffer
-    
-    const int out_size = out_row_bytes * newheight;
-    for (int i = 0; i < out_size; i++) {
-        result[i] = 0;
+};
+auto scaled_image8_deleter = [](Image8* img) {
+    if (img) {
+        delete[] img->data;  // delete the raw array
+        delete img;          // delete the Image8 object itself
     }
-    for (unsigned int y = 0; y < newheight; y++) {
-        for (unsigned int x = 0; x < newwidth; x++) {
-            // Map to source pixel using nearest neighbor
-            unsigned const int src_y = floor(y / scaling_factor);
-            unsigned const int src_x = floor(x / scaling_factor);
-            // Get the index of the byte containing the pixel we look for
-            const int src_byte_index = src_y * in_row_bytes + src_x / 8;
-            const uint8_t src_mask = 0x80 >> (src_x % 8);
-            const bool pixel_on = input[src_byte_index] & src_mask;  //See if pixel is on or off
-            // Set the output pixel at the scaled coordinates to the result of the previous check
-            if (pixel_on) {
-                const int dst_byte_index = y * out_row_bytes + x / 8;
-                const uint8_t dst_mask = 0x80 >> (x % 8);
-                result[dst_byte_index] |= dst_mask;
-            }
-        }
-    }
-    std::pair<unsigned const int, unsigned const int> newsize = {newwidth, newheight};
-    return newsize;
-}
-/*  USAGE EXAMPLE:
-
-    float scaling_factor = 0.25;
-    pair<float,float> imsize = {128, 64};
-    int arraysize = int(floor((imsize.first*scaling_factor)*(imsize.second*scaling_factor)));
-    uint16_t* output = new uint16_t[arraysize];
-    //pair<unsigned int, unsigned int> imagesize = scale(nicerlandscape, 128, 64, output, scaling_factor);
-    delete[] output;
-*/
+};
 
 //NOT YET TESTED, SHOULD WORK
-Image16 scale(Image16 input, float scaling_factor){
-    Image16 output(floor(input.width*scaling_factor), input.height*scaling_factor);
-    output.setSize(ArrUtils::getArrSize16(output.width, output.height, 1.0f));
-    for(unsigned int b=0; b < output.height; b++){
-        for(unsigned int i=0; i < output.width; i++){
+std::shared_ptr<Image16> scale(Image16 input, float scaling_factor){
+    unsigned int scaled_width  = floor(input.width  * scaling_factor);
+    unsigned int scaled_height = floor(input.height * scaling_factor);
+    uint16_t* buffer = new uint16_t[ArrUtils::getArrSize16(scaled_width, scaled_height, 1.0f)];
+    
+    for(unsigned int b=0; b < scaled_height; b++){
+        for(unsigned int i=0; i < scaled_width; i++){
             unsigned const int scaled_h = floor(b/scaling_factor);
             unsigned const int scaled_w = floor(i/scaling_factor);
-            output.data.get()[b * output.width + i] = input.data.get()[(scaled_h * input.width) + scaled_w];
+            buffer[b * scaled_width + i] = input.data[(scaled_h * input.width) + scaled_w];
         }
     }
-    return output;
+    return std::shared_ptr<Image16>(new Image16(scaled_width, scaled_height, buffer), scaled_image16_deleter);
 }
-Image8 scale(Image8 input, float scaling_factor){
+
+
+std::shared_ptr<Image8> scale(Image8 input, float scaling_factor){
     unsigned int scaled_width  = floor(input.width  * scaling_factor);
     unsigned int scaled_height = floor(input.height * scaling_factor);
 
-    Image8 output(scaled_width, scaled_height);
-
-    int outputArrSize = ArrUtils::getArrSize8(output.width, output.height, 1.0f);
-    output.setSize(outputArrSize);
+    int outputArrSize = ArrUtils::getArrSize8(scaled_width, scaled_height, 1.0f);
+    uint8_t* buffer = new uint8_t[outputArrSize];
 
     const int in_row_bytes  = (input.width + 7) / 8;
-    const int out_row_bytes = (output.width + 7) / 8;
+    const int out_row_bytes = (scaled_width + 7) / 8;
 
-    // Clear the output buffer
-    /*
-    for (int i = 0; i < outputArrSize; i++) {
-        output.data[i] = 0;
-    }
-    */
-    std::fill(output.data.get(), output.data.get() + output.dataSize, 0);
+    std::fill(buffer, buffer + outputArrSize, 0);
 
-    for (unsigned int y = 0; y < output.height; y++) {
-        for (unsigned int x = 0; x < output.width; x++) {
+    for (unsigned int y = 0; y < scaled_height; y++) {
+        for (unsigned int x = 0; x < scaled_width; x++) {
             // Map to source pixel using nearest neighbor
             unsigned const int src_y = floor(y / scaling_factor);
             unsigned const int src_x = floor(x / scaling_factor);
             // Get the index of the byte containing the pixel we look for
             const size_t src_byte_index = src_y * in_row_bytes + src_x / 8;
             const uint8_t src_mask = 0x80 >> (src_x % 8);
-            const bool pixel_on = input.data.get()[src_byte_index] & src_mask;  //See if pixel is on or off
+            const bool pixel_on = input.data[src_byte_index] & src_mask;  //See if pixel is on or off
             // Set the output pixel at the scaled coordinates to the result of the previous check
             if (pixel_on) {
                 const size_t dst_byte_index = y * out_row_bytes + x / 8;
                 const uint8_t dst_mask = 0x80 >> (x % 8);
-                output.data.get()[dst_byte_index] |= dst_mask;
+                buffer[dst_byte_index] |= dst_mask;
             }
         }
     }
-    return output;
+    return std::shared_ptr<Image8>(new Image8(scaled_width, scaled_height, buffer), scaled_image8_deleter);
 }
+
 
 float mapF(float x, float in_min, float in_max, float out_min, float out_max)
 {
