@@ -2,9 +2,14 @@
 #include <images/home_images.h>
 #include <UIAssist.h>
 #include <constants.h>
+#include <HardwareAid.h>
+
+Button button(26);
+std::vector<Button*> buttons = {&button};
 
 MonoImage play(home_large_test, HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, 46, 16);
 void setup() {
+  button.setup();
   Serial.begin(115200);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
@@ -24,20 +29,28 @@ uint64_t start = millis();
 bool render_frametime = true;
 //-------------SETTINGS----------------//
 
+void framerate(bool render){
+  if(render){
+    canvas.setCursor(0,50);
+    canvas.setTextSize(2);
+    canvas.setTextColor(ST7735_GREEN);
+    canvas.setTextWrap(false);
+    canvas.print(millis()-start);
+  }
+}
 
 void loop() {
     canvas.fillScreen(0x0000);
-    if(render_frametime){
-      canvas.setCursor(0,50);
-      canvas.setTextSize(2);
-      canvas.setTextColor(ST7735_GREEN);
-      canvas.setTextWrap(false);
-      canvas.print(millis()-start);
-    }
-  
-  
+    framerate(render_frametime);
+
+    updateButtons(buttons);
     play.render();
-    //Serial.println(play.anim.getProgress());
+
+    if (button.clickedOnce){
+      render_frametime = !render_frametime;
+    }
+
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
     start = millis();
+    rememberButtons(buttons);
 }  

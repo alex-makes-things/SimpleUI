@@ -1,5 +1,8 @@
+#pragma once
 #include <ImageAssist.h>
 #include <constants.h>
+#include <functional>
+
 
 //-----------FUNCTION PROTOTYPES----------------//
 
@@ -20,10 +23,9 @@ class Animator{
   float final;
   float progress;  //The progress is ultimately the output of the structure, which lies clamped in between initial and final
   uint64_t currentTime = micros();   //This is needed for the temporal aspect of the interpolation
-  unsigned int elapsed = 0;
-  void invert(){ //Function that can be called at runtime which inverts the direction of the interpolation
-    reverse = !reverse;
-  }
+  uint64_t now = micros();
+  uint64_t elapsed = 0;
+  
   public:
   Animator(float i=0, float f=0, unsigned int d=0){  //Basic constructor
     duration = d*1000;
@@ -32,28 +34,23 @@ class Animator{
     progress = initial;
   }
 
+  //Updates the animation logic and attributes
   void update(){
-    uint64_t now = micros();
+    now = micros();
     elapsed = clamp(now-currentTime, 0, duration);
     if(isDone){
       if(breathing){
         if(looping){
           invert();
           bounce_done = false;
-          now, currentTime = micros();
-          elapsed = 0;
         } else if (!bounce_done){
           invert();
           isDone=false;
-          now, currentTime = micros();
-          elapsed = 0;
           bounce_done = true;
         }
       }
       if(looping){
-        progress = (reverse) ? final : initial; 
-        isDone = false;
-        currentTime = micros();
+        resetAnim();
       }
     }
 
@@ -69,22 +66,54 @@ class Animator{
     
   }
 
+  //Set the duration of the animation to the passed unsigned integer
   void setDuration(unsigned int d){duration = d;}
+
+  //Set the initial value to the passed unsigned integer
   void setInitial(unsigned int i){initial = i;}
+
+  //Set the final value to the passed unsigned integer
   void setFinal(unsigned int f){final = f;}
+
+  //Set the looping setting to the passed bool
   void setLoop(bool loop){looping = loop;}
+
+  //Set the breathing setting to the passed bool
   void setBreathing(bool breathe){breathing = breathe;}
+
+  //Set the reverse setting to the passed bool
   void setReverse(bool rev){
     reverse = rev;
     progress = (progress==initial&&reverse) ? final : progress;
   }
+
+  //Returns the current progress
   float getProgress(){return progress;}
+
+  //Returns the completion state
   bool getDone(){return isDone;}
+
+  //Resets the animation's settings to the defaults (false)
   void defaultModifiers(){
     looping = false;
     reverse = false;
     breathing = false;
     bounce_done = false;
+  }
+
+  //Makes the animation restart
+  void resetAnim(){
+    progress = (reverse) ? final : initial;
+    currentTime = micros();
+    isDone = false;
+  }
+
+  //Function that can be called at any time which inverts the direction of the animation
+  void invert(){ 
+    reverse = !reverse;
+    elapsed = duration-elapsed;
+    currentTime = now-elapsed;
+    now = currentTime;
   }
 };
 
@@ -92,10 +121,11 @@ class Animator{
 class UIElement{
     protected:
     unsigned int width=0, height=0, x = 0, y = 0;
-
+    unsigned int scene_id = 0;
+    unsigned int own_id = 0;
     public:
     bool draw=true; //If true, the element is drawn, if false it's kept hidden.
-    UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy){
+    UIElement(unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0){
         width = w;
         height = h;
         x = posx;
@@ -104,28 +134,65 @@ class UIElement{
     void setPosX(unsigned int X){x = X;}
     void setPosY(unsigned int Y){y = Y;}
     void setPos(unsigned int X, unsigned int Y){x=X;y=Y;}
+    virtual void render() = 0;
 };
 
-class MonoImage : UIElement{
+class MonoImage : public UIElement{
   protected:
     Image8 body;
     float scale_fac=1;
     uint16_t color = 0xffff;
   public:
     Animator anim;
-    MonoImage(const uint8_t* input, unsigned int w, unsigned int h, unsigned int posx, unsigned int posy):UIElement(w, h, posx, posy){
+    MonoImage(const uint8_t* input = nullptr, unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0):UIElement(w, h, posx, posy){
         body = Image8(w,h,input);
+    }
+    MonoImage(const uint8_t* input, unsigned int w, unsigned int h){
+        body = Image8(w,h,input);
+        width = w;
+        height = h;
     }
     void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
     void setScale(float scale){scale_fac = scale;}
-    virtual void render(){
-      anim.update();
-      scale_fac = anim.getProgress();
-      renderBmp8(x, y, body, scale_fac, color);
+    void setColor(uint16_t hue){color = hue;}
+    void render() override {
+      if (draw){
+        anim.update();
+        scale_fac = anim.getProgress();
+        renderBmp8(x, y, body, scale_fac, color);
+      }
     }
 };
 
-//class MonoApp : MonoImage{};
+//DO NOT USE
+class MonoApp : public MonoImage{
+  std::function<void()> onHover = 0;
+  std::function<void()> onClick = 0;
+  bool isHovered = false;
+  bool isClicked = false;
+  MonoApp(const uint8_t* input = nullptr, unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0):MonoImage(input, w, h, posx, posy){}
+  void setOnHover(std::function<void()> hover){
+    onHover = hover;
+  }
+  void setOnClick(std::function<void()> click){
+    onClick = click;
+  }
+  void render() override {
+    if (draw){
+      if (isHovered){
+        onHover();
+      }
+      if (isClicked){
+        onClick();
+      }
+    }
+  }
+};
+
+struct Focus{
+  unsigned int scene_focus = 0;
+  unsigned int element_focus = 0;
+};
 
 /**************************************************************************/
 /*!

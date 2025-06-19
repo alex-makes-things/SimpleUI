@@ -1,3 +1,4 @@
+#pragma once
 #include <stdint.h>
 #include <pgmspace.h>
 // 'large_gallery', 36x36px

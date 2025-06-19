@@ -1,5 +1,4 @@
-#include <iostream>
-#include <fstream>
+#pragma once
 #include <stdint.h>
 #include <math.h>
 #include <iomanip>
@@ -22,7 +21,7 @@ namespace ArrUtils{
     }
 }
 
-
+//Stores the pointer to a monochrome image, and its dimensions
 struct Image8{
     size_t dataSize = 0;
     unsigned int width = 0;
@@ -53,6 +52,7 @@ struct Image8{
     }
 };
 
+//Stores the pointer to an RGB 16-bit image, along with its dimensions
 struct Image16{
     size_t dataSize = 0;
     unsigned int width = 0;
