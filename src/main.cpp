@@ -7,7 +7,9 @@
 Button button(26);
 std::vector<Button*> buttons = {&button};
 
-MonoImage play(home_large_test, HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, 46, 16);
+Image8 playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test, 0xffff);
+Image8 smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test, 0xffff);
+MonoImage play(&playTest, 64, 32);
 void setup() {
   button.setup();
   Serial.begin(115200);
@@ -15,9 +17,10 @@ void setup() {
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
-  play.InitAnim(0.1, 1, 2500);
-  play.anim.setBreathing(true);
-  play.anim.setLoop(true);
+  play.setImg(&smallPlayTest);
+  play.centered=true;
+  play.InitAnim(1,1.44,100);
+  play.anim.stop();
 }
 
 //-------------BEFORE LOOP----------------//
@@ -27,6 +30,7 @@ uint64_t start = millis();
 
 //-------------SETTINGS----------------//
 bool render_frametime = true;
+unsigned int frameTime=0;
 //-------------SETTINGS----------------//
 
 void framerate(bool render){
@@ -35,22 +39,38 @@ void framerate(bool render){
     canvas.setTextSize(2);
     canvas.setTextColor(ST7735_GREEN);
     canvas.setTextWrap(false);
-    canvas.print(millis()-start);
+    canvas.print(frameTime);
   }
 }
 
 void loop() {
     canvas.fillScreen(0x0000);
-    framerate(render_frametime);
 
     updateButtons(buttons);
+    
     play.render();
 
-    if (button.clickedOnce){
-      render_frametime = !render_frametime;
+    if(button.clickedOnce){
+      if(play.getImg()==&smallPlayTest && play.anim.getStart()){
+        play.overrideScaling = false;
+        play.anim.start();
+      }
+      else if(play.getImg()==&playTest && play.anim.getDone()){
+        play.overrideScaling = false;
+        play.setImg(&smallPlayTest);
+        play.anim.resetAnim();
+        play.anim.stop();
+      }
     }
-
+    if(play.anim.getDone()&&play.getImg()==&smallPlayTest){
+      play.overrideScaling = true;
+      play.setImg(&playTest);
+      play.setScale(1);
+    }
+    
+    framerate(render_frametime);
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
-    start = millis();
     rememberButtons(buttons);
+    frameTime = millis()-start;
+    start = millis();
 }  

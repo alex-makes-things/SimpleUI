@@ -26,24 +26,31 @@ struct Image8{
     size_t dataSize = 0;
     unsigned int width = 0;
     unsigned int height = 0;
+    uint16_t color = 0xffff;
     uint8_t* data = nullptr;
     Image8(unsigned int w=0, unsigned int h=0) : width(w), height(h) {}
 
-    Image8(unsigned int w, unsigned int h, uint8_t* input) : width(w), height(h){
+    Image8(unsigned int w, unsigned int h, uint8_t* input, uint16_t hue = 0xffff) : width(w), height(h){
         setSize(ArrUtils::getArrSize8(w,h,1.0f));
         setData(input);
+        setColor(hue);
     }
 
-    Image8(unsigned int w, unsigned int h, const uint8_t* input) : width(w), height(h){
+    Image8(unsigned int w, unsigned int h, const uint8_t* input, uint16_t hue = 0xffff) : width(w), height(h){
         setSize(ArrUtils::getArrSize8(w,h,1.0f));
         data = (uint8_t*)input;
+        setColor(hue);
     }
+
 
     void setSize(unsigned int s){
         dataSize = s;
     }
     void setData(uint8_t* input) {
         data = input;
+    }
+    void setColor(uint16_t hue){
+        color = hue;
     }
     void setImg(unsigned int w, unsigned int h, uint8_t* d) {
         width = w;
@@ -149,7 +156,7 @@ std::shared_ptr<Image8> scale(Image8 input, float scaling_factor){
             }
         }
     }
-    return std::shared_ptr<Image8>(new Image8(scaled_width, scaled_height, buffer), scaled_image8_deleter);
+    return std::shared_ptr<Image8>(new Image8(scaled_width, scaled_height, buffer, input.color), scaled_image8_deleter);
 }
 
 

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <vector>
 
+//Simple pushbutton wrapper
 class Button{
   public:
   uint8_t pin;
