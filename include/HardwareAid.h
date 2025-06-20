@@ -34,3 +34,9 @@ void rememberButtons(const std::vector<Button*>& myButtons) {
         btn->remember();
     }
 }
+
+void setupButtons(const std::vector<Button*>& myButtons) {
+    for (Button* btn : myButtons) {
+        btn->setup();
+    }
+}

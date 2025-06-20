@@ -4,23 +4,53 @@
 #include <constants.h>
 #include <HardwareAid.h>
 
-Button button(26);
-std::vector<Button*> buttons = {&button};
+Button button1(26);
+Button button2(25);
+std::vector<Button*> buttons = {&button1, &button2};
 
 Image8 playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test, 0xffff);
 Image8 smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test, 0xffff);
+
+Image8 largeGallery(HOME_LARGE_GALLERY_SIZE, HOME_LARGE_GALLERY_SIZE, home_large_gallery, 0xffff);
+Image8 smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small_gallery, 0xffff);
+
+Image8 largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings, 0xffff);
+Image8 smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings, 0xffff);
+
 MonoImage play(&playTest, 64, 32);
+MonoImage settings(&largeSettings, 25, 32);
+MonoImage gallery(&largeGallery, 103, 32);
+
+std::vector<MonoImage*> apps = {&play, &settings, &gallery};
+
+Focus focus(0,1);
 void setup() {
-  button.setup();
+  setupButtons(buttons);
   Serial.begin(115200);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
+
+  play.setIdentity(0, 1);
+  gallery.setIdentity(0, 2);
+  settings.setIdentity(0, 0);
+
   play.setImg(&smallPlayTest);
+  settings.setImg(&smallSettings);
+  gallery.setImg(&smallGallery);
+
   play.centered=true;
-  play.InitAnim(1,1.44,100);
+  settings.centered=true;
+  gallery.centered=true;
+
+  play.InitAnim(1,1.44,75);
+  settings.InitAnim(1,1.44,75);
+  gallery.InitAnim(1,1.44,75);
+
   play.anim.stop();
+  settings.anim.stop();
+  gallery.anim.stop();
 }
 
 //-------------BEFORE LOOP----------------//
@@ -43,34 +73,71 @@ void framerate(bool render){
   }
 }
 
+void handleAppSelectionAnimation(MonoImage* app, Image8* unfocused, Image8* focused, bool isPrimary = false){
+  if(focus.hasChanged() || (focus.isFirstBoot && isPrimary)){
+      if(focus.isFocusing(app->getId())){
+        if(app->getImg()==unfocused && app->anim.getStart())
+        {
+          app->overrideScaling = false;
+          app->anim.start();
+        }
+      } else {
+        if(app->getImg()==focused && app->anim.getDone())
+        {
+          app->overrideScaling = false;
+          app->setImg(unfocused);
+          app->anim.resetAnim();
+          app->anim.invert();
+        }
+      }
+    }
+    
+    if(app->anim.getDone()&&app->getImg()==unfocused){
+      if(focus.isFocusing(app->getId())){
+        app->overrideScaling = true;
+        app->setImg(focused);
+        app->setScale(1);
+      }else{
+        app->overrideScaling = false;
+        app->anim.invert();
+        app->anim.resetAnim();
+        app->anim.stop();
+      }
+      
+    }
+}
+
 void loop() {
-    canvas.fillScreen(0x0000);
+    canvas.fillScreen(0x0000); //Fill the background with a black frame
 
-    updateButtons(buttons);
-    
+    updateButtons(buttons);  //Update button states for every button
     play.render();
+    settings.render();
+    gallery.render();
 
-    if(button.clickedOnce){
-      if(play.getImg()==&smallPlayTest && play.anim.getStart()){
-        play.overrideScaling = false;
-        play.anim.start();
-      }
-      else if(play.getImg()==&playTest && play.anim.getDone()){
-        play.overrideScaling = false;
-        play.setImg(&smallPlayTest);
-        play.anim.resetAnim();
-        play.anim.stop();
-      }
+    if (button1.clickedOnce && !button2.clickedOnce && areStill(apps)) {
+      if(focus.current.ele_id == 2)
+      {focus.focus(0, 0);}
+      else
+      {focus.focus(0,focus.current.ele_id+1);}
     }
-    if(play.anim.getDone()&&play.getImg()==&smallPlayTest){
-      play.overrideScaling = true;
-      play.setImg(&playTest);
-      play.setScale(1);
+    if (button2.clickedOnce&& !button1.clickedOnce && areStill(apps)) {
+      if(focus.current.ele_id == 0)
+      {focus.focus(0, 2);}
+      else
+      {focus.focus(0,focus.current.ele_id-1);}
     }
+
+    handleAppSelectionAnimation(&play, &smallPlayTest, &playTest, true);
+    handleAppSelectionAnimation(&settings, &smallSettings, &largeSettings);
+    handleAppSelectionAnimation(&gallery, &smallGallery, &largeGallery);
+
+    framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
+    fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
     
-    framerate(render_frametime);
-    fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT);
+  //TEMPORAL VARIABLES AND FUNCTIONS
     rememberButtons(buttons);
+    focus.update();
     frameTime = millis()-start;
     start = millis();
 }  

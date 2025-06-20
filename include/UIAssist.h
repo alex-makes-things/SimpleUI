@@ -21,6 +21,11 @@ struct Coordinates{
   Coordinates(int posx=0, int posy=0):x(posx), y(posy){}
 };
 
+struct Identity{
+  unsigned int scene_id=0;
+  unsigned int ele_id=0;
+};
+
 class Animator{
   private:
   bool isAtStart = true;
@@ -131,12 +136,13 @@ class Animator{
 
   //Returns the current progress
   float getProgress(){return progress;}
-  
+
   //Returns the completion state
   bool getDone(){return isDone;}
 
   bool getStart(){return isAtStart;}
 
+  bool getIsEnabled(){return enable;}
   //Resets the animation's settings to the defaults (false)
   void defaultModifiers(){
     looping = false;
@@ -179,14 +185,14 @@ class UIElement{
     void setPosX(unsigned int X){position.x = X;}
     void setPosY(unsigned int Y){position.y = Y;}
     void setPos(unsigned int X, unsigned int Y){position.x=X;position.y=Y;}
-    void setID(unsigned int i){id.own_id=i;}
+    void setID(unsigned int i){id.ele_id=i;}
     void setSceneID(unsigned int i){id.scene_id=i;}
     void setIdentity(unsigned int scene, unsigned int own){
       id.scene_id = scene;
-      id.own_id = own;
+      id.ele_id = own;
     }
     Identity getId(){
-
+      return id;
     }
     virtual void render() = 0;
     void setCenter(bool center){
@@ -241,15 +247,46 @@ class MonoImage : public UIElement{
     }
 };
 
-struct Identity{
-  unsigned int scene_id=0;
-  unsigned int own_id=0;
-};
+
 
 struct Focus{
-  unsigned int scene_focus = 0;
-  unsigned int element_focus = 0;
+  Identity current;
+  Identity previous;
+  bool isFirstBoot = true;
+  Focus(unsigned int sc=0, unsigned int ele=0){
+    current.scene_id = sc;
+    current.ele_id = ele;
+  }
+  void focus(unsigned int sc, unsigned int ele){
+    previous.scene_id = current.scene_id;
+    previous.ele_id = current.ele_id;
+    current.scene_id = sc;
+    current.ele_id = ele;
+  }
+  void update(){
+    previous.scene_id = current.scene_id;
+    previous.ele_id = current.ele_id;
+    isFirstBoot = false;
+  }
+  bool hasChanged(){
+    return (previous.scene_id != current.scene_id || previous.ele_id != current.ele_id );
+  }
+  bool isFocusing(Identity obj){
+    return (current.ele_id == obj.ele_id && current.scene_id == obj.scene_id);
+  }
 };
+
+
+bool areStill(std::vector<MonoImage*> images){
+  int count = 0;
+  for (MonoImage* image : images) {
+    if(image->anim.getDone() || image->anim.getStart()){
+      count++;
+    }
+  }
+  return (count == images.size()) ? true : false;
+}
+
 
 /**************************************************************************/
 /*!
