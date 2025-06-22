@@ -71,19 +71,23 @@ void framerate(bool render){
 
 void handleAppSelectionAnimation(MonoImage* app, Image8* unfocused, Image8* focused, bool isPrimary = false){
   if(ui.focus.hasChanged() || (ui.focus.isFirstBoot && isPrimary)){
-      if(ui.focus.isFocusing(app->getId())){
-        if(app->getImg()==unfocused && app->anim.getStart())
-        {
-          app->overrideScaling = false;
-          app->anim.start();
-        }
-      } else {
-        if(app->getImg()==focused && app->anim.getDone())
+    if(ui.focus.isFocusing(app->getId())){
+      if(app->isAnimating()){
+        app->anim.resetAnim();
+        app->anim.stop();
+      }
+      if(app->getImg()==unfocused && app->anim.getStart())
+      {
+        app->overrideScaling = false;
+        app->anim.start();
+      }
+    }else{
+      if(app->getImg()==focused && app->anim.getDone())
         {
           app->overrideScaling = false;
           app->setImg(unfocused);
           app->anim.resetAnim();
-          app->anim.invert();
+          app->anim.setReverse(true);
         }
       }
     }
@@ -95,7 +99,7 @@ void handleAppSelectionAnimation(MonoImage* app, Image8* unfocused, Image8* focu
         app->setScale(1);
       }else{
         app->overrideScaling = false;
-        app->anim.invert();
+        app->anim.setReverse(false);
         app->anim.resetAnim();
         app->anim.stop();
       }
@@ -110,41 +114,26 @@ void loop() {
     canvas.fillScreen(0x0000); //Fill the background with a black frame
 
     updateButtons(buttons);  //Update button states for every button
-    //home.renderScene();
-    ui.render();
-
-    /*
-    if (button1.clickedOnce && !button2.clickedOnce && UiUtils::areStill(apps)) {
-      if(focus.current.ele_id == 2)
-      {focus.focus(0, 0);}
-      else
-      {focus.focus(0,focus.current.ele_id+1);}
-    }
-    if (button2.clickedOnce&& !button1.clickedOnce && UiUtils::areStill(apps)) {
-      if(focus.current.ele_id == 0)
-      {focus.focus(0, 2);}
-      else
-      {focus.focus(0,focus.current.ele_id-1);}
-    }*/
-
-    if (button1.clickedOnce && !button2.clickedOnce && UiUtils::areStill(apps)) {
+    
+    if (button1.clickedOnce && !button2.clickedOnce ) {
       ui.focusDirection(RIGHT);
     }
-    if (button2.clickedOnce&& !button1.clickedOnce && UiUtils::areStill(apps)) {
+    if (button2.clickedOnce&& !button1.clickedOnce ) {
       ui.focusDirection(LEFT);
     }
-
+    
     handleAppSelectionAnimation(&play, &smallPlayTest, &playTest, true);
     handleAppSelectionAnimation(&settings, &smallSettings, &largeSettings);
     handleAppSelectionAnimation(&gallery, &smallGallery, &largeGallery);
-
+    ui.render();
+    
 
     framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
     
   //TEMPORAL VARIABLES AND FUNCTIONS
     rememberButtons(buttons);
-    focus.update();
+    ui.focus.update();
     frameTime = millis()-start;
     start = millis();
 }  
