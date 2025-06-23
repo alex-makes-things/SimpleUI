@@ -77,7 +77,7 @@ Animator::Animator(float i, float f, unsigned int d){  //Basic constructor
 
 void Animator::update(){
     if(reverse){
-      //Magnetic attachment to initial value
+      //Magnetic attachment to initial value and setting isAtStart
         if (fabs(progress-final)<=0.005f){
           progress = final;
         }
@@ -89,12 +89,14 @@ void Animator::update(){
         isAtStart = (progress==initial) ? true : false;
       }
 
+    //If the animation is active, the update logic runs
     if (enable){
       now = micros();
       elapsed = clamp(now-currentTime, 0, duration);
 
-
+      //Here I add anything that has to run when the animation is in its done state
       if(isDone){
+        //Breathing feature
         if(breathing){
           if(looping){
             invert();
@@ -105,11 +107,13 @@ void Animator::update(){
             bounce_done = true;
           }
         }
+        //Restarts the animation if the looping condition is met
         if(looping){
           resetAnim();
         }
       }
 
+      //Interpolation
       if(!isDone){
         if (elapsed<duration){
           float t = (reverse) ? clamp(fabs(1-mapF(elapsed, 0, duration, 0, 1)),0,1) : clamp(mapF(elapsed, 0, duration, 0, 1),0,1);
@@ -167,9 +171,9 @@ void Animator::invert(){
   }
 
 UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy){
-    width = w;
-    height = h;
-    position = Coordinates(posx, posy);
+    m_width = w;
+    m_height = h;
+    m_position = Coordinates(posx, posy);
   }
 
 Coordinates UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
@@ -178,30 +182,108 @@ Coordinates UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos,
       return Coordinates(new_x, new_y);
     }
 
+
+//--------------------UIElement CLASS---------------------------------------------------------------//
+bool UIElement::isFocused(){
+  return m_parent_ui->focusedElement==this;
+}
+
 //--------------------MonoImage CLASS---------------------------------------------------------------//
 
 void MonoImage::setImg(Image8* img){
-      body = img;
-      width = img->width;
-      height = img->height;
-      color = img->color;
+      m_body = img;
+      m_width = img->width;
+      m_height = img->height;
+      m_color = img->color;
     }
 
 void MonoImage::render(){
       anim.update();
-      scale_fac = (overrideScaling) ? scale_fac : anim.getProgress();
+      m_scale_fac = (overrideScaling) ? m_scale_fac : anim.getProgress();
       if (draw){
         Coordinates drawing_pos;
-        if (scale_fac != 1){
-          std::shared_ptr<Image8> scaled = scale(*body, scale_fac);
-          drawing_pos = (centered) ? centerToCornerPos(position.x, position.y, scaled->width, scaled ->height) : position;
-          canvas.drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, color);
+        if (m_scale_fac != 1){
+          std::shared_ptr<Image8> scaled = scale(*m_body, m_scale_fac);
+          drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled ->height) : m_position;
+          canvas.drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
         }else{
-          drawing_pos = (centered) ? centerToCornerPos(position.x, position.y, body->width, body->height) : position;
-          canvas.drawBitmap(drawing_pos.x, drawing_pos.y, body->data, body->width, body->height, color);
+          drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_body->width, m_body->height) : m_position;
+          canvas.drawBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height, m_color);
         }
       }
     }
+
+//--------------------AnimatedMonoApp CLASS---------------------------------------------------------------//
+
+void AnimatedMonoApp::handleAppSelectionAnimation(){
+  if (m_parent_focus->hasChanged() || (m_parent_focus->isFirstBoot && m_parent_ui->focusedElement == this)){
+    if(isFocused()){  
+    //If the element is being focused
+      if(isAnimating() && anim.getDirection()){
+        anim.invert();
+      }
+      if(getActive()==m_unselected && anim.getStart())
+      { //If it's showing the small img and hasn't started
+
+        anim.start();
+      }
+    }
+    else{ //Focus has changed but the element isn't focused
+      if(getActive()==m_selected && anim.getDone() && !anim.getDirection())
+      {
+        anim.setFinal(m_ratio);
+        m_showing = m_unselected;
+        anim.resetAnim();
+        anim.setReverse(true);
+      }
+      if(isAnimating() && !anim.getDirection()){
+        anim.invert();
+      }
+    }
+  }
+  if (getActive()==m_unselected && anim.getDone()){
+    if (!anim.getDirection()){
+      //Since we animated from a small image to a larger image, setting final to 1 automatically clamps it to 1
+      anim.setFinal(1); 
+      m_showing = m_selected;
+    }
+    else //This branch however, only runs on the falling part of the animation
+    {
+      //After the sum of all the conditions, we know that the animation has finished reversing to the smaller image
+      anim.setFinal(m_ratio);
+      anim.setReverse(false);  //Make sure the animation goes in the right direction when it is focused again
+      anim.resetAnim();
+      anim.stop();   
+    }
+  }
+  
+}
+
+void AnimatedMonoApp::render(){
+  handleAppSelectionAnimation();
+  anim.update();
+  float scale_fac = anim.getProgress();
+  if (draw)
+  {
+    Coordinates drawing_pos;
+    if (scale_fac != 1)
+    {
+      std::shared_ptr<Image8> scaled = scale(*m_showing, scale_fac);
+      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled->height) : m_position;
+      m_width = scaled->width;
+      m_height = scaled->height;
+      canvas.drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
+    }
+    else
+    {
+      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_showing->width, m_showing->height) : m_position;
+      m_width = m_showing->width;
+      m_height = m_showing->height;
+      canvas.drawBitmap(drawing_pos.x, drawing_pos.y, m_showing->data, m_showing->width, m_showing->height, m_color);
+    }
+  }
+}
+
 
 //--------------------Scene STRUCT---------------------------------------------------------------//
 
@@ -226,10 +308,10 @@ void Scene::renderScene(){
 
 //--------------------UI CLASS---------------------------------------------------------------//
 
-UI::UI(Identity first_focus, Scene* first_scene){
+UI::UI(UIElement* first_focus, Scene* first_scene){
     addScene(first_scene);
     focusScene(first_scene);
-    focusedElement = first_scene->elements[first_focus.ele_id];
+    focusedElement = first_focus;
     focus = Focus(first_scene->id, focusedElement->getId().ele_id);
   }
 
@@ -237,6 +319,7 @@ void UI::addScene(Scene* scene){
     scenes.insert({scene->id, scene});
     for(auto elem : scene->elements){
       elem.second->setFocusListener(&focus);
+      elem.second->setUiListener(this);
     }
   }
 
@@ -249,12 +332,20 @@ void UI::focusScene(Scene* scene){
   }
 
 void UI::focusDirection(unsigned int direction){
+  if(!m_focusing_busy){
+    m_focusing_busy = true;
     UIElement* next_element = UiUtils::isThereACollision(direction, focusedScene, focusedElement, max_focusing_distance);
     if(next_element){
         focus.focus(next_element->getId().scene_id, next_element->getId().ele_id);
         focusedElement = next_element;
     }
   }
+}
+
+void UI::update(){
+  focus.update();
+  m_focusing_busy = false;
+}
 
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
