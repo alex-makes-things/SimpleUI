@@ -11,61 +11,43 @@
     @param    color 16-bit color with which the bitmap should be drawn
 */
 /**************************************************************************/
-void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color){
+void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color, GFXcanvas16* canvas){
   if(scaling != 1){
     std::shared_ptr<Image8> scaled = scale(img, scaling);
-    canvas.drawBitmap(x,y, scaled->data, scaled->width, scaled->height, color);
+    canvas->drawBitmap(x,y, scaled->data, scaled->width, scaled->height, color);
   }else{
-    canvas.drawBitmap(x,y, img.data, img.width, img.height, color);
+    canvas->drawBitmap(x,y, img.data, img.width, img.height, color);
   }
 }
-/**************************************************************************/
-/*!
-   @brief      A blazingly fast method for drawing an RGB bitmap to the screen
-    @param    x   Top left corner x coordinate
-    @param    y   Top left corner y coordinate
-    @param    bitmap  byte array with monochrome bitmap
-    @param    w   Width of bitmap in pixels
-    @param    h   Height of bitmap in pixels
-*/
-/**************************************************************************/
-void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
-{
-  tft.startWrite();
-  tft.setAddrWindow(x,y,w,h);
-  tft.writePixels(bitmap, w*h, false);
-  tft.endWrite();
-}
+
 
 
 //--------------------FOCUS STRUCT---------------------------------------------------------------//
-Focus::Focus(unsigned int sc, unsigned int ele){
-    current.scene_id = sc;
-    current.ele_id = ele;
+Focus::Focus(std::string ele){
+    current = ele;
   }
 
-void Focus::focus(unsigned int sc, unsigned int ele){
-    previous.scene_id = current.scene_id;
-    previous.ele_id = current.ele_id;
-    current.scene_id = sc;
-    current.ele_id = ele;
+void Focus::focus(std::string ele){
+    previous = current;
+    current = ele;
   }
 
 void Focus::update(){
-    previous.scene_id = current.scene_id;
-    previous.ele_id = current.ele_id;
+    previous = current;
     isFirstBoot = false;
   }
 
 bool Focus::hasChanged(){
-    return (previous.scene_id != current.scene_id || previous.ele_id != current.ele_id );
+    return (previous != current);
   }
 
-bool Focus::isFocusing(Identity obj){
-    return (current.ele_id == obj.ele_id && current.scene_id == obj.scene_id);
+bool Focus::isFocusing(std::string obj){
+    return (current == obj);
   }
 
-
+bool Focus::isFocusing(UIElement* obj){
+    return (current == obj->getId());
+  }
 
 //--------------------ANIMATOR CLASS---------------------------------------------------------------//
 Animator::Animator(float i, float f, unsigned int d){  //Basic constructor
@@ -78,12 +60,12 @@ Animator::Animator(float i, float f, unsigned int d){  //Basic constructor
 void Animator::update(){
     if(reverse){
       //Magnetic attachment to initial value and setting isAtStart
-        if (fabs(progress-final)<=0.005f){
+        if (fabs(progress-final)<=0.00005f){
           progress = final;
         }
         isAtStart = (progress==final) ? true : false;
       }else{
-        if (fabs(progress-initial)<=0.005f){
+        if (fabs(progress-initial)<=0.00005f){
           progress = initial;
         }
         isAtStart = (progress==initial) ? true : false;
@@ -170,7 +152,10 @@ void Animator::invert(){
     now = currentTime;
   }
 
-UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy){
+  //--------------------UIElement CLASS---------------------------------------------------------------//
+
+UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy)
+  {
     m_width = w;
     m_height = h;
     m_position = Coordinates(posx, posy);
@@ -183,9 +168,9 @@ Coordinates UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos,
     }
 
 
-//--------------------UIElement CLASS---------------------------------------------------------------//
+
 bool UIElement::isFocused(){
-  return m_parent_ui->focusedElement==this;
+  return m_parent_ui->focusedElementID==m_UUID;
 }
 
 //--------------------MonoImage CLASS---------------------------------------------------------------//
@@ -205,10 +190,10 @@ void MonoImage::render(){
         if (m_scale_fac != 1){
           std::shared_ptr<Image8> scaled = scale(*m_body, m_scale_fac);
           drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled ->height) : m_position;
-          canvas.drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
+          m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
         }else{
           drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_body->width, m_body->height) : m_position;
-          canvas.drawBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height, m_color);
+          m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height, m_color);
         }
       }
     }
@@ -216,11 +201,12 @@ void MonoImage::render(){
 //--------------------AnimatedMonoApp CLASS---------------------------------------------------------------//
 
 void AnimatedMonoApp::handleAppSelectionAnimation(){
-  if (m_parent_focus->hasChanged() || (m_parent_focus->isFirstBoot && m_parent_ui->focusedElement == this)){
+  if (m_parent_focus->hasChanged() || (m_parent_focus->isFirstBoot && isFocused())){
     if(isFocused()){  
     //If the element is being focused
+
       if(isAnimating() && anim.getDirection()){
-        anim.invert();
+        anim.invert();                         // If it's mid closing-animation, invert it
       }
       if(getActive()==m_unselected && anim.getStart())
       { //If it's showing the small img and hasn't started
@@ -237,7 +223,7 @@ void AnimatedMonoApp::handleAppSelectionAnimation(){
         anim.setReverse(true);
       }
       if(isAnimating() && !anim.getDirection()){
-        anim.invert();
+        anim.invert();                          // If it's mid opening-animation, invert it
       }
     }
   }
@@ -256,7 +242,15 @@ void AnimatedMonoApp::handleAppSelectionAnimation(){
       anim.stop();   
     }
   }
-  
+  if(!isFocused() && !isAnimating() && m_showing == m_selected){
+    anim.setFinal(m_ratio);
+    m_showing = m_unselected;
+    anim.resetAnim();
+    anim.setReverse(true);
+  }
+  if (isFocused() && !isAnimating() && m_showing == m_unselected){
+    anim.start();
+  }
 }
 
 void AnimatedMonoApp::render(){
@@ -272,14 +266,14 @@ void AnimatedMonoApp::render(){
       drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled->height) : m_position;
       m_width = scaled->width;
       m_height = scaled->height;
-      canvas.drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
+      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
     }
     else
     {
       drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_showing->width, m_showing->height) : m_position;
       m_width = m_showing->width;
       m_height = m_showing->height;
-      canvas.drawBitmap(drawing_pos.x, drawing_pos.y, m_showing->data, m_showing->width, m_showing->height, m_color);
+      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, m_showing->data, m_showing->width, m_showing->height, m_color);
     }
   }
 }
@@ -287,36 +281,36 @@ void AnimatedMonoApp::render(){
 
 //--------------------Scene STRUCT---------------------------------------------------------------//
 
-Scene::Scene(std::vector<UIElement*> elementGroup, unsigned int scene_id, bool active){
+Scene::Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus){
     for(int i = 0; i<elementGroup.size(); i++){
-      elements.insert({elementGroup[i]->getId().ele_id,elementGroup[i]});
+      elements.insert({elementGroup[i]->getId(),elementGroup[i]});
     }
-    id = scene_id;
-    isActive = active;
-    for(UIElement* elem : elementGroup){
-      elem->setSceneID(id);
-    }
+    primaryElementID = first_focus.getId();
   }
 
 void Scene::renderScene(){
-    if(isActive){
-      for(auto elem : elements){
-        elem.second->render();
-      }
-    }
+  for (auto elem : elements)
+  {
+    elem.second->render();
   }
+}
 
-//--------------------UI CLASS---------------------------------------------------------------//
+UIElement* Scene::getElementByUUID(std::string UUID){
+  return elements.at(UUID);
+}
 
-UI::UI(UIElement* first_focus, Scene* first_scene){
-    addScene(first_scene);
-    focusScene(first_scene);
-    focusedElement = first_focus;
-    focus = Focus(first_scene->id, focusedElement->getId().ele_id);
+  //--------------------UI CLASS---------------------------------------------------------------//
+
+  UI::UI(Scene& first_scene, GFXcanvas16& framebuffer)
+  {
+    buffer = &framebuffer;
+    addScene(&first_scene);
+    focusScene(&first_scene);
+    focus = Focus(first_scene.primaryElementID);
   }
 
 void UI::addScene(Scene* scene){
-    scenes.insert({scene->id, scene});
+    scenes.push_back(scene);                 //KEEP IN MIND "REALLOCATES"
     for(auto elem : scene->elements){
       elem.second->setFocusListener(&focus);
       elem.second->setUiListener(this);
@@ -325,19 +319,16 @@ void UI::addScene(Scene* scene){
 
 void UI::focusScene(Scene* scene){
     focusedScene = scene;
-    for(auto sc: scenes){
-      sc.second->isActive=false;
-    }
-    focusedScene->isActive=true;
+    focusedElementID = focusedScene->primaryElementID;
   }
 
 void UI::focusDirection(unsigned int direction){
   if(!m_focusing_busy){
     m_focusing_busy = true;
-    UIElement* next_element = UiUtils::isThereACollision(direction, focusedScene, focusedElement, max_focusing_distance);
+    UIElement* next_element = UiUtils::isThereACollision(direction, focusedScene, focusedScene->getElementByUUID(focusedElementID), max_focusing_distance);
     if(next_element){
-        focus.focus(next_element->getId().scene_id, next_element->getId().ele_id);
-        focusedElement = next_element;
+        focus.focus(next_element->getId());
+        focusedElementID = next_element->getId();
     }
   }
 }
@@ -378,7 +369,7 @@ UIElement* UiUtils::isThereACollision(unsigned int direction, Scene* scene, UIEl
     Coordinates center_point = (focused->centered) ? focused->getPos() 
                                                    : UiUtils::centerPos(focused->getPos().x, focused->getPos().y, focused->getWidth(), focused->getHeight());
     Scene temporaryScene = *scene;
-    temporaryScene.elements.erase(focused->getId().ele_id);
+    temporaryScene.elements.erase(focused->getId());
     Coordinates new_point;
     switch(direction){
       case RIGHT:
