@@ -3,6 +3,7 @@
 #include <math.h>
 #include <memory>
 #include <algorithm>
+#include <functional>
 
 
 namespace ArrUtils{
@@ -31,7 +32,15 @@ struct Image8{
         setColor(hue);
     }
 
-    void setSize(unsigned int s){
+    
+    /*~Image8(){    This breaks everything
+        if(data){
+            delete[] data;
+        }
+    }*/
+
+    void setSize(unsigned int s)
+    {
         dataSize = s;
     }
     void setData(uint8_t* input) {
@@ -79,21 +88,26 @@ struct Image16{
 };
 
 float mapF(float x, float in_min, float in_max, float out_min, float out_max);
-int lerp(float v0, float v1, float t);
-float lerpF(float v0, float v1, float t);
-float clamp(float n, float min, float max);
+int zlerp(float v0, float v1, float t);
+float zlerpF(float v0, float v1, float t);
+float zclamp(float n, float min, float max);
 std::shared_ptr<Image16> scale(Image16 input, float scaling_factor);
 std::shared_ptr<Image8> scale(Image8 input, float scaling_factor);
 
-auto scaled_image16_deleter = [](Image16* img) {
-    if (img) {
-        delete[] img->data;  // delete the raw array
-        delete img;          // delete the Image8 object itself
+inline std::function<void(Image16 *)> scaled_image16_deleter = [](Image16 *img)
+{
+    if (img)
+    {
+        delete[] img->data; // delete the raw array
+        delete img;         // delete the Image8 object itself
     }
 };
-auto scaled_image8_deleter = [](Image8* img) {
-    if (img) {
-        delete[] img->data;  // delete the raw array
-        delete img;          // delete the Image8 object itself
+
+inline std::function<void(Image8 *)> scaled_image8_deleter = [](Image8 *img)
+{
+    if (img)
+    {
+        delete[] img->data; // delete the raw array
+        delete img;         // delete the Image8 object itself
     }
 };

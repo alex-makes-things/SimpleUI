@@ -60,12 +60,13 @@ Animator::Animator(float i, float f, unsigned int d){  //Basic constructor
 void Animator::update(){
     if(reverse){
       //Magnetic attachment to initial value and setting isAtStart
-        if (fabs(progress-final)<=0.00005f){
+        
+        if (fabs(progress-final)<=0.0005f){
           progress = final;
         }
         isAtStart = (progress==final) ? true : false;
       }else{
-        if (fabs(progress-initial)<=0.00005f){
+        if (fabs(progress-initial)<=0.0005f){
           progress = initial;
         }
         isAtStart = (progress==initial) ? true : false;
@@ -74,7 +75,7 @@ void Animator::update(){
     //If the animation is active, the update logic runs
     if (enable){
       now = micros();
-      elapsed = clamp(now-currentTime, 0, duration);
+      elapsed = std::clamp(now-currentTime, static_cast<unsigned long long>(0), static_cast<unsigned long long>(duration));
 
       //Here I add anything that has to run when the animation is in its done state
       if(isDone){
@@ -96,10 +97,10 @@ void Animator::update(){
       }
 
       //Interpolation
-      if(!isDone){
+      else{
         if (elapsed<duration){
-          float t = (reverse) ? clamp(fabs(1-mapF(elapsed, 0, duration, 0, 1)),0,1) : clamp(mapF(elapsed, 0, duration, 0, 1),0,1);
-          progress = lerpF(initial, final, t);
+          progress = std::clamp(mapF((reverse) ? duration-elapsed : elapsed, 0, duration, initial, final), initial, final);
+
           } else {
             isDone = true;
             progress = (reverse) ? initial : final;
@@ -158,13 +159,13 @@ UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned
   {
     m_width = w;
     m_height = h;
-    m_position = Coordinates(posx, posy);
+    m_position = Point(posx, posy);
   }
 
-Coordinates UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
+Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
       unsigned int new_x = floor((float)x_pos-((float)w/2));
       unsigned int new_y = floor((float)y_pos-((float)h/2));
-      return Coordinates(new_x, new_y);
+      return Point(new_x, new_y);
     }
 
 
@@ -184,9 +185,9 @@ void MonoImage::setImg(Image8* img){
 
 void MonoImage::render(){
       anim.update();
-      m_scale_fac = (overrideScaling) ? m_scale_fac : anim.getProgress();
+      m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
       if (draw){
-        Coordinates drawing_pos;
+        Point drawing_pos;
         if (m_scale_fac != 1){
           std::shared_ptr<Image8> scaled = scale(*m_body, m_scale_fac);
           drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled ->height) : m_position;
@@ -198,10 +199,55 @@ void MonoImage::render(){
       }
     }
 
+void MonoImage::setScale(float scale){
+  {
+    m_scale_fac = scale;
+    m_overrideAnimationScaling = (scale < 0) ? false : true;
+  }
+}
+//--------------------RGBImage CLASS---------------------------------------------------------------//
+
+void RGBImage::setImg(Image16 *img)
+{
+  m_body = img;
+  m_width = img->width;
+  m_height = img->height;
+}
+
+void RGBImage::render()
+{
+  anim.update();
+  m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
+  if (draw)
+  {
+    Point drawing_pos;
+    if (m_scale_fac != 1)
+    {
+      std::shared_ptr<Image16> scaled = scale(*m_body, m_scale_fac);
+      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled->height) : m_position;
+      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height);
+    }
+    else
+    {
+      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_body->width, m_body->height) : m_position;
+      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height);
+    }
+  }
+}
+
+void RGBImage::setScale(float scale)
+{
+  {
+    m_scale_fac = scale;
+    m_overrideAnimationScaling = (scale < 0) ? false : true;
+  }
+}
+
 //--------------------AnimatedMonoApp CLASS---------------------------------------------------------------//
 
 void AnimatedMonoApp::handleAppSelectionAnimation(){
-  if (m_parent_focus->hasChanged() || (m_parent_focus->isFirstBoot && isFocused())){
+  if (m_parent_ui->focus.hasChanged() || (m_parent_ui->focus.isFirstBoot && isFocused()))
+  {
     if(isFocused()){  
     //If the element is being focused
 
@@ -227,29 +273,32 @@ void AnimatedMonoApp::handleAppSelectionAnimation(){
       }
     }
   }
-  if (getActive()==m_unselected && anim.getDone()){
-    if (!anim.getDirection()){
-      //Since we animated from a small image to a larger image, setting final to 1 automatically clamps it to 1
-      anim.setFinal(1); 
-      m_showing = m_selected;
+  else{
+    if (getActive()==m_unselected && anim.getDone()){
+      if (!anim.getDirection()){
+        //Since we animated from a small image to a larger image, setting final to 1 automatically clamps it to 1
+        anim.setFinal(1); 
+        m_showing = m_selected;
+      }
+      else //This branch however, only runs on the falling part of the animation
+      {
+        //After the sum of all the conditions, we know that the animation has finished reversing to the smaller image
+        anim.setFinal(m_ratio);
+        anim.setReverse(false);  //Make sure the animation goes in the right direction when it is focused again
+        anim.resetAnim();
+        anim.stop();   
+      }
     }
-    else //This branch however, only runs on the falling part of the animation
-    {
-      //After the sum of all the conditions, we know that the animation has finished reversing to the smaller image
+    
+    if(!isFocused() && !isAnimating() && m_showing == m_selected){
       anim.setFinal(m_ratio);
-      anim.setReverse(false);  //Make sure the animation goes in the right direction when it is focused again
+      m_showing = m_unselected;
       anim.resetAnim();
-      anim.stop();   
+      anim.setReverse(true);
     }
-  }
-  if(!isFocused() && !isAnimating() && m_showing == m_selected){
-    anim.setFinal(m_ratio);
-    m_showing = m_unselected;
-    anim.resetAnim();
-    anim.setReverse(true);
-  }
-  if (isFocused() && !isAnimating() && m_showing == m_unselected){
-    anim.start();
+    if (isFocused() && anim.getStart() && !anim.getIsEnabled() && m_showing == m_unselected){
+      anim.start();
+    }
   }
 }
 
@@ -259,7 +308,7 @@ void AnimatedMonoApp::render(){
   float scale_fac = anim.getProgress();
   if (draw)
   {
-    Coordinates drawing_pos;
+    Point drawing_pos;
     if (scale_fac != 1)
     {
       std::shared_ptr<Image8> scaled = scale(*m_showing, scale_fac);
@@ -288,12 +337,13 @@ Scene::Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus){
     primaryElementID = first_focus.getId();
   }
 
-void Scene::renderScene(){
-  for (auto elem : elements)
+void Scene::renderScene()
   {
-    elem.second->render();
+    for (auto elem : elements)
+    {
+      elem.second->render();
+    }
   }
-}
 
 UIElement* Scene::getElementByUUID(std::string UUID){
   return elements.at(UUID);
@@ -312,7 +362,6 @@ UIElement* Scene::getElementByUUID(std::string UUID){
 void UI::addScene(Scene* scene){
     scenes.push_back(scene);                 //KEEP IN MIND "REALLOCATES"
     for(auto elem : scene->elements){
-      elem.second->setFocusListener(&focus);
       elem.second->setUiListener(this);
     }
   }
@@ -322,10 +371,10 @@ void UI::focusScene(Scene* scene){
     focusedElementID = focusedScene->primaryElementID;
   }
 
-void UI::focusDirection(unsigned int direction){
-  if(!m_focusing_busy){
+void UI::focusDirection(Direction direction, FocusingType alg){
+  if(isFocusingFree()){
     m_focusing_busy = true;
-    UIElement* next_element = UiUtils::isThereACollision(direction, focusedScene, focusedScene->getElementByUUID(focusedElementID), max_focusing_distance);
+    UIElement* next_element = UiUtils::SignedDistance(direction, alg, focusedScene, focusedScene->getElementByUUID(focusedElementID), max_focusing_distance);
     if(next_element){
         focus.focus(next_element->getId());
         focusedElementID = next_element->getId();
@@ -340,6 +389,8 @@ void UI::update(){
 
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
+const float UiUtils::degToRadCoefficient= 0.01745329251;
+
 bool UiUtils::areStill(std::vector<MonoImage*> images){
     int count = 0;
     for (MonoImage* image : images) {
@@ -350,76 +401,143 @@ bool UiUtils::areStill(std::vector<MonoImage*> images){
       return (count == images.size()) ? true : false;
   }
 
-bool UiUtils::isPointInElement(Coordinates point, UIElement* element){
-    Coordinates element_pos = element->getPos();
+bool UiUtils::isPointInElement(Point point, UIElement* element){
+    Point element_pos = element->getPos();
     if ((point.x >= element_pos.x && point.x <= element_pos.x + element->getWidth()) && (point.y >= element_pos.y && point.y <= element_pos.y + element->getHeight())){
       return true;
     }
     return false;
   }
 
-Coordinates UiUtils::centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h){
+Point UiUtils::centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h){
       int new_x = floor((float)x_pos+((float)w/2));
       int new_y = floor((float)y_pos+((float)h/2));
-      return Coordinates(new_x, new_y);
+      return Point(new_x, new_y);
   }
 
-UIElement* UiUtils::isThereACollision(unsigned int direction, Scene* scene, UIElement* focused, unsigned int max_distance){
+UIElement* UiUtils::SignedDistance(Direction direction, FocusingType alg, Scene* scene, UIElement* focused, unsigned int max_distance){
 
-    Coordinates center_point = (focused->centered) ? focused->getPos() 
+    Point center_point = (focused->centered) ? focused->getPos() 
                                                    : UiUtils::centerPos(focused->getPos().x, focused->getPos().y, focused->getWidth(), focused->getHeight());
     Scene temporaryScene = *scene;
     temporaryScene.elements.erase(focused->getId());
-    Coordinates new_point;
-    switch(direction){
-      case RIGHT:
-        for(int i = 0; i<=max_distance;i++)
+    Point new_point;
+    if (alg == FocusingType::Linear)
+    {
+      switch (direction)
+      {
+      case Direction::Right:
+        for (int i = 0; i <= max_distance; i++)
         {
-          new_point = Coordinates(center_point.x+i, center_point.y);
+          new_point = Point(center_point.x + i, center_point.y);
 
-          for(auto elem : temporaryScene.elements){
-            if(isPointInElement(new_point, elem.second)){
+          for (auto elem : temporaryScene.elements)
+          {
+            if (isPointInElement(new_point, elem.second))
+            {
               return elem.second;
             }
           }
         }
         break;
-      case LEFT:
-        for(int i = 0; i<=max_distance;i++)
+      case Direction::Left:
+        for (int i = 0; i <= max_distance; i++)
         {
-          new_point = Coordinates(center_point.x-i, center_point.y);
+          new_point = Point(center_point.x - i, center_point.y);
 
-          for(auto elem : temporaryScene.elements){
-            if(isPointInElement(new_point, elem.second)){
+          for (auto elem : temporaryScene.elements)
+          {
+            if (isPointInElement(new_point, elem.second))
+            {
               return elem.second;
             }
           }
         }
         break;
-      case UP:
-        for(int i = 0; i<=max_distance;i++)
+      case Direction::Up:
+        for (int i = 0; i <= max_distance; i++)
         {
-          new_point = Coordinates(center_point.x, center_point.y+i);
+          new_point = Point(center_point.x, center_point.y + i);
 
-          for(auto elem : temporaryScene.elements){
-            if(isPointInElement(new_point, elem.second)){
+          for (auto elem : temporaryScene.elements)
+          {
+            if (isPointInElement(new_point, elem.second))
+            {
               return elem.second;
             }
           }
         }
         break;
-      case DOWN:
-        for(int i = 0; i<=max_distance;i++)
+      case Direction::Down:
+        for (int i = 0; i <= max_distance; i++)
         {
-          new_point = Coordinates(center_point.x, center_point.y-i);
+          new_point = Point(center_point.x, center_point.y - i);
 
-          for(auto elem : temporaryScene.elements){
-            if(isPointInElement(new_point, elem.second)){
+          for (auto elem : temporaryScene.elements)
+          {
+            if (isPointInElement(new_point, elem.second))
+            {
               return elem.second;
             }
           }
         }
         break;
+      }
     }
-  return nullptr;
+    else
+    {
+      Cone cone(static_cast<unsigned int>(direction), max_distance, 90, 2, 6);
+      return findElementInCone(focused, scene, cone);
+    }
+
+    return nullptr;
+}
+
+Point UiUtils::polarToCartesian(float radius, float angle){
+  int x = radius * cos(-angle * degToRadCoefficient);
+  int y = radius * sin(-angle * degToRadCoefficient);
+  return Point(x, y);
+}
+
+std::set<Point> UiUtils::computeConePoints(Point vertex, Cone cone){
+  std::set<Point> buffer;
+
+  int half_aperture = cone.aperture/2;
+  int starting_angle = cone.bisector - half_aperture;
+  int end_angle = cone.bisector + half_aperture;
+
+  for(int i = starting_angle; i<end_angle; i+=cone.aperture_step){
+    for(int b = 0; b<cone.radius; b+=cone.rad_step){
+      Point tempPoint = polarToCartesian(b, i);
+      tempPoint.x += vertex.x;
+      tempPoint.y += vertex.y;
+      buffer.emplace(tempPoint);
+    }
   }
+  return buffer;
+}
+
+UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, Cone cone){
+  int half_aperture = cone.aperture / 2;
+  int starting_angle = cone.bisector - half_aperture;
+  int end_angle = cone.bisector + half_aperture;
+  Scene tempScene = *currentScene;
+  tempScene.elements.erase(focused->getId());
+
+  for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
+  {
+    for (int b = 0; b < cone.radius; b += cone.rad_step)
+    {
+      Point tempPoint = polarToCartesian(b, i);
+      Point centerPoint = focused->getPos();
+      tempPoint.x += centerPoint.x;
+      tempPoint.y += centerPoint.y;
+      for(auto elem : tempScene.elements){
+        if (isPointInElement(tempPoint, elem.second)){
+          return elem.second;
+        }
+      }
+    }
+  }
+  return nullptr;
+}

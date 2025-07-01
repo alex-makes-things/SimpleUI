@@ -3,6 +3,7 @@
 #include <Adafruit_ST7735.h>
 #include <SPI.h>
 #include <images/home_images.h>
+#include <images/nicerlandscape.h>
 #include <UIAssist.h>
 #include <HardwareAid.h>
 
@@ -23,7 +24,8 @@ GFXcanvas16 canvas = GFXcanvas16(SCREENWIDTH, SCREENHEIGHT);
 //--------------------------UI SETUP-----------------------------//
 Button button1(26);
 Button button2(25);
-std::vector<Button*> buttons = {&button1, &button2};
+Button button3(27);
+std::vector<Button*> buttons = {&button1, &button2, &button3};
 
 Image8 playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test, 0xffff);
 Image8 smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test, 0xffff);
@@ -34,14 +36,62 @@ Image8 smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small
 Image8 largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings, 0xffff);
 Image8 smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings, 0xffff);
 
+Image16 landscape(SCREENWIDTH, SCREENHEIGHT, nicerlandscape);
+RGBImage nicelandscape(landscape, 0,0);
+
 AnimatedMonoApp play(smallPlayTest, playTest, 64, 32, true);
 AnimatedMonoApp settings(smallSettings, largeSettings, 25, 32, true);
 AnimatedMonoApp gallery(smallGallery, largeGallery, 103, 32, true);
 
 std::vector<UIElement*> elements = {&play, &settings, &gallery};
 Scene home(elements, play);
+Scene test({&nicelandscape}, nicelandscape);
 UI ui(home, canvas);
 //--------------------------UI SETUP-----------------------------//
+
+TaskHandle_t serialComms;
+void handleComms( void *pvParameters){
+  Serial.setTimeout(250);
+
+  while(true){
+    if (Serial.available()){
+      String input = Serial.readString();
+      input.trim();
+      if (input == "freemem")
+      {
+        Serial.printf("Used heap: %fkb / %fkb\n", (static_cast<float>(ESP.getHeapSize()) / 1000.0) - static_cast<float>(ESP.getFreeHeap()) / 1000.0, static_cast<float>(ESP.getHeapSize()) / 1000.0);
+      }
+      else if(input == "version"){
+        Serial.println(ESP.getSdkVersion());
+      }
+      else if (input == "reset")
+      {
+        Serial.println("Rebooting...");
+        ESP.restart();
+      }
+      else if (input == "uptime")
+      {
+        Serial.printf("Uptime: %lu seconds\n", millis() / 1000);
+      }
+      else if (input == "freq")
+      {
+        Serial.printf("Frequency: %dMHz\n", ESP.getCpuFreqMHz());
+      }
+      else if (input == "debugui")
+      {
+        UIElement *obj = ui.focusedScene->elements.at(ui.focusedElementID);
+        Serial.printf("ID: %s\n", ui.focusedElementID.c_str());
+        Serial.printf("isAtStart: %s\n", obj->anim.getStart() ? "true" : "false");
+        Serial.printf("isDone: %s\n", obj->anim.getDone() ? "true" : "false");
+        Serial.printf("isEnabled: %s\n", obj->anim.getIsEnabled() ? "true" : "false");
+        Serial.printf("Reverse: %s\n", obj->anim.getDirection() ? "true" : "false");
+        Serial.printf("Draw: %s\n", obj->draw ? "true" : "false");
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
 
 
 void setup() {
@@ -51,10 +101,13 @@ void setup() {
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
+  ui.addScene(&test);
+  nicelandscape.setScale(1);
+  xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
 }
 
 //-------------BEFORE LOOP----------------//
-uint64_t start = millis();
+uint64_t start = micros(), calcStart = micros();
 //-------------BEFORE LOOP----------------//
 
 
@@ -62,6 +115,7 @@ uint64_t start = millis();
 bool render_frametime = true;
 unsigned int frameTime=0;
 unsigned int calculationsTime=0;
+uint16_t debugColor = 0xfc60; // Use a valid 16-bit color value (e.g., 0xfc60)
 //-------------SETTINGS----------------//
 
 void framerate(bool render){
@@ -92,17 +146,21 @@ void loop() {
     updateButtons(buttons);  //Update button states for every button
     
     if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.focusDirection(RIGHT);
+      ui.focusDirection(Direction::Right, FocusingType::Cone);
     }
     if (button2.clickedOnce&& !button1.clickedOnce ) {
-      ui.focusDirection(LEFT);
+      ui.focusDirection(Direction::Left, FocusingType::Cone);
     }
 
+    calcStart = micros();
+    if(button3.clickedOnce&&ui.focusedElementID==play.getId()){
+      ui.focusScene(&test);
+    }
     ui.render();
+    calculationsTime = micros() - calcStart;
     
     computeTime(render_frametime);
     framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
-    calculationsTime = micros()-start;
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
     
   //TEMPORAL VARIABLES AND FUNCTIONS

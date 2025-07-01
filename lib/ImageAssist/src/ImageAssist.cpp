@@ -4,15 +4,17 @@ float mapF(float x, float in_min, float in_max, float out_min, float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-int lerp(float v0, float v1, float t) {
+int zlerp(float v0, float v1, float t) {
   return int(round((1 - t) * v0 + t * v1));
 }
-float lerpF(float v0, float v1, float t) {
+float zlerpF(float v0, float v1, float t) {
   return (1 - t) * v0 + t * v1;
 }
-float clamp(float n, float min, float max) {
+float zclamp(float n, float min, float max) {
   return std::max(min, std::min(n, max));
 }
+
+
 
 int ArrUtils::getArrSize8(int width, int height, float scale_fac) {
         int w = int(floor(width * scale_fac));
@@ -29,7 +31,8 @@ int ArrUtils::getArrSize16 (int width, int height, float scale_fac){
 std::shared_ptr<Image16> scale(Image16 input, float scaling_factor){
     unsigned int scaled_width  = floor(input.width  * scaling_factor);
     unsigned int scaled_height = floor(input.height * scaling_factor);
-    uint16_t* buffer = new uint16_t[ArrUtils::getArrSize16(scaled_width, scaled_height, 1.0f)];
+    size_t outputArrSize = ArrUtils::getArrSize16(scaled_width, scaled_height, 1.0f);
+    uint16_t* buffer = new uint16_t[outputArrSize];
     
     for(unsigned int b=0; b < scaled_height; b++){
         for(unsigned int i=0; i < scaled_width; i++){
@@ -46,7 +49,7 @@ std::shared_ptr<Image8> scale(Image8 input, float scaling_factor){
     unsigned int scaled_width  = floor(input.width  * scaling_factor);
     unsigned int scaled_height = floor(input.height * scaling_factor);
 
-    int outputArrSize = ArrUtils::getArrSize8(scaled_width, scaled_height, 1.0f);
+    size_t outputArrSize = ArrUtils::getArrSize8(scaled_width, scaled_height, 1.0f);
     uint8_t* buffer = new uint8_t[outputArrSize];
 
     const int in_row_bytes  = (input.width + 7) / 8;
