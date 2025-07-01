@@ -24,29 +24,29 @@ void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color, GFXcanv
 
 //--------------------FOCUS STRUCT---------------------------------------------------------------//
 Focus::Focus(std::string ele){
-    current = ele;
+    focusedElementID = ele;
   }
 
 void Focus::focus(std::string ele){
-    previous = current;
-    current = ele;
+    previousElementID = focusedElementID;
+    focusedElementID = ele;
   }
 
 void Focus::update(){
-    previous = current;
+    previousElementID = focusedElementID;
     isFirstBoot = false;
   }
 
 bool Focus::hasChanged(){
-    return (previous != current);
+    return (previousElementID != focusedElementID);
   }
 
 bool Focus::isFocusing(std::string obj){
-    return (current == obj);
+    return (focusedElementID == obj);
   }
 
 bool Focus::isFocusing(UIElement* obj){
-    return (current == obj->getId());
+    return (focusedElementID == obj->getId());
   }
 
 //--------------------ANIMATOR CLASS---------------------------------------------------------------//
@@ -171,7 +171,7 @@ Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsig
 
 
 bool UIElement::isFocused(){
-  return m_parent_ui->focusedElementID==m_UUID;
+  return m_parent_ui->focus.focusedElementID==m_UUID;
 }
 
 //--------------------MonoImage CLASS---------------------------------------------------------------//
@@ -353,10 +353,10 @@ UIElement* Scene::getElementByUUID(std::string UUID){
 
   UI::UI(Scene& first_scene, GFXcanvas16& framebuffer)
   {
+    focus = Focus(first_scene.primaryElementID);
     buffer = &framebuffer;
     addScene(&first_scene);
     focusScene(&first_scene);
-    focus = Focus(first_scene.primaryElementID);
   }
 
 void UI::addScene(Scene* scene){
@@ -367,17 +367,22 @@ void UI::addScene(Scene* scene){
   }
 
 void UI::focusScene(Scene* scene){
-    focusedScene = scene;
-    focusedElementID = focusedScene->primaryElementID;
+    focus.focusedScene = scene;
+    focus.focusedElementID = focus.focusedScene->primaryElementID;
   }
 
-void UI::focusDirection(Direction direction, FocusingType alg){
+
+
+/// @brief Focus the closest object in any direction
+/// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
+/// @param alg The focusing algorithm that you want to use (FocusingType::Linear, FocusingType::Cone)
+void UI::focusDirection(unsigned int direction, FocusingType alg){
   if(isFocusingFree()){
     m_focusing_busy = true;
-    UIElement* next_element = UiUtils::SignedDistance(direction, alg, focusedScene, focusedScene->getElementByUUID(focusedElementID), max_focusing_distance);
+    UIElement* next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.focusedScene, focus.focusedScene->getElementByUUID(focus.focusedElementID));
     if(next_element){
         focus.focus(next_element->getId());
-        focusedElementID = next_element->getId();
+        focus.focusedElementID = next_element->getId();
     }
   }
 }
@@ -415,78 +420,48 @@ Point UiUtils::centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h){
       return Point(new_x, new_y);
   }
 
-UIElement* UiUtils::SignedDistance(Direction direction, FocusingType alg, Scene* scene, UIElement* focused, unsigned int max_distance){
+UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings settings, FocusingType alg, Scene* scene, UIElement* focused){
 
     Point center_point = (focused->centered) ? focused->getPos() 
                                                    : UiUtils::centerPos(focused->getPos().x, focused->getPos().y, focused->getWidth(), focused->getHeight());
     Scene temporaryScene = *scene;
     temporaryScene.elements.erase(focused->getId());
-    Point new_point;
+    Point new_point = center_point;
     if (alg == FocusingType::Linear)
     {
-      switch (direction)
+      Ray ray{settings.max_distance, 1, direction};
+      switch (settings.accuracy)
       {
-      case Direction::Right:
-        for (int i = 0; i <= max_distance; i++)
-        {
-          new_point = Point(center_point.x + i, center_point.y);
-
-          for (auto elem : temporaryScene.elements)
-          {
-            if (isPointInElement(new_point, elem.second))
-            {
-              return elem.second;
-            }
-          }
-        }
+      case FocusAccuracy::Low:
+        ray.step = 4;
         break;
-      case Direction::Left:
-        for (int i = 0; i <= max_distance; i++)
-        {
-          new_point = Point(center_point.x - i, center_point.y);
-
-          for (auto elem : temporaryScene.elements)
-          {
-            if (isPointInElement(new_point, elem.second))
-            {
-              return elem.second;
-            }
-          }
-        }
+      case FocusAccuracy::Medium:
+        ray.step = 2;
         break;
-      case Direction::Up:
-        for (int i = 0; i <= max_distance; i++)
-        {
-          new_point = Point(center_point.x, center_point.y + i);
-
-          for (auto elem : temporaryScene.elements)
-          {
-            if (isPointInElement(new_point, elem.second))
-            {
-              return elem.second;
-            }
-          }
-        }
-        break;
-      case Direction::Down:
-        for (int i = 0; i <= max_distance; i++)
-        {
-          new_point = Point(center_point.x, center_point.y - i);
-
-          for (auto elem : temporaryScene.elements)
-          {
-            if (isPointInElement(new_point, elem.second))
-            {
-              return elem.second;
-            }
-          }
-        }
+      case FocusAccuracy::High:
+        ray.step = 1;
         break;
       }
+      return findElementInRay(focused, scene, ray);
     }
-    else
+
+    else  //IF THE METHOD IS CONE
     {
-      Cone cone(static_cast<unsigned int>(direction), max_distance, 90, 2, 6);
+      Cone cone(direction, settings.max_distance, 90, 2, 6);
+      switch (settings.accuracy){
+        case FocusAccuracy::Low:
+          cone.aperture_step = 3;
+          cone.rad_step = 8;
+          break;
+        case FocusAccuracy::Medium:
+          cone.aperture_step = 2;
+          cone.rad_step = 6;
+          break;
+        case FocusAccuracy::High:
+          cone.aperture_step = 1;
+          cone.rad_step = 2;
+          break;
+        }
       return findElementInCone(focused, scene, cone);
     }
 
@@ -536,6 +511,24 @@ UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, C
         if (isPointInElement(tempPoint, elem.second)){
           return elem.second;
         }
+      }
+    }
+  }
+  return nullptr;
+}
+
+UIElement* UiUtils::findElementInRay(UIElement *focused, Scene *currentScene, Ray ray){
+  Scene tempScene = *currentScene;
+  tempScene.elements.erase(focused->getId());
+
+  for(int i = 0; i<ray.ray_length; i+=ray.step){
+    Point tempPoint = polarToCartesian(i, ray.direction);
+    Point centerPoint = focused->getPos();
+    tempPoint.x += centerPoint.x;
+    tempPoint.y += centerPoint.y;
+    for(auto elem : tempScene.elements){
+      if (isPointInElement(tempPoint, elem.second)){
+        return elem.second;
       }
     }
   }

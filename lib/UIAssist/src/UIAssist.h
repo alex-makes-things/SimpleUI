@@ -6,7 +6,10 @@
 #include <Adafruit_GFX.h>
 #include <set>
 
-
+#define RIGHT 0
+#define UP 90
+#define LEFT 180
+#define DOWN 270
 
 using std::string;
 
@@ -22,6 +25,12 @@ class MonoImage;
 class AnimatedMonoApp;
 class Animator;
 class RGBImage;
+struct Point;
+struct Cone;
+struct Ray;
+struct Scene;
+struct Focus;
+struct FocusingSettings;
 
 struct Point{
   int x=0;
@@ -48,9 +57,16 @@ struct Cone{
   }
 };
 
+struct Ray{
+  unsigned int ray_length;
+  unsigned int step;
+  unsigned int direction;
+};
+
 struct Focus{
-  std::string current;
-  std::string previous;
+  std::string focusedElementID;
+  std::string previousElementID;
+  Scene* focusedScene = nullptr;
   bool isFirstBoot = true;
   inline Focus(std::string ele = "");
   /*!
@@ -69,6 +85,14 @@ struct Focus{
   */
   inline bool isFocusing(std::string obj);
   inline bool isFocusing(UIElement *obj);
+};
+
+enum class FocusAccuracy{Low, Medium, High};
+
+struct FocusingSettings{
+  unsigned int max_distance;
+  bool outline;
+  FocusAccuracy accuracy;
 };
 
 class Animator{
@@ -262,29 +286,27 @@ namespace UiUtils{
   bool areStill(std::vector<MonoImage*> images);
   bool isPointInElement(Point point, UIElement* element);
   Point centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h);
-  UIElement* SignedDistance(Direction direction, FocusingType alg, Scene* scene, UIElement* focused, unsigned int max_distance);
+  UIElement* SignedDistance(unsigned int direction, FocusingSettings settings, FocusingType alg, Scene *scene, UIElement *focused);
   Point polarToCartesian(float radius, float angle);
   std::set<Point> computeConePoints(Point vertex, Cone cone);
   UIElement* findElementInCone(UIElement* focused, Scene* currentScene, Cone cone);
+  UIElement* findElementInRay(UIElement *focused, Scene *currentScene, Ray ray);
 }
 
 class UI{
-  public:
+public:
   Focus focus;
   std::vector<Scene*> scenes;
-  std::string focusedElementID;
-  Scene* focusedScene = nullptr;
-  unsigned int max_focusing_distance = 64;
-  bool focus_outline = false;
+  FocusingSettings focusingSettings{64, false, FocusAccuracy::Medium};
 
   UI(Scene& first_scene, GFXcanvas16& framebuffer);
 
   void addScene(Scene* scene);
   void focusScene(Scene* scene);
-  void render(){focusedScene->renderScene();}
-  void focusDirection(Direction direction, FocusingType alg);
+  void render(){focus.focusedScene->renderScene();}
+  void focusDirection(unsigned int direction, FocusingType alg);
   void update();
-  bool isFocusingFree(){return !m_focusing_busy;}
+  inline bool isFocusingFree(){return !m_focusing_busy;}
   GFXcanvas16 *buffer;
 
 private:

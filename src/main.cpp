@@ -79,8 +79,8 @@ void handleComms( void *pvParameters){
       }
       else if (input == "debugui")
       {
-        UIElement *obj = ui.focusedScene->elements.at(ui.focusedElementID);
-        Serial.printf("ID: %s\n", ui.focusedElementID.c_str());
+        UIElement *obj = ui.focus.focusedScene->elements.at(ui.focus.focusedElementID);
+        Serial.printf("ID: %s\n", ui.focus.focusedElementID.c_str());
         Serial.printf("isAtStart: %s\n", obj->anim.getStart() ? "true" : "false");
         Serial.printf("isDone: %s\n", obj->anim.getDone() ? "true" : "false");
         Serial.printf("isEnabled: %s\n", obj->anim.getIsEnabled() ? "true" : "false");
@@ -146,14 +146,14 @@ void loop() {
     updateButtons(buttons);  //Update button states for every button
     
     if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.focusDirection(Direction::Right, FocusingType::Cone);
+      ui.focusDirection(RIGHT, FocusingType::Linear);
     }
     if (button2.clickedOnce&& !button1.clickedOnce ) {
-      ui.focusDirection(Direction::Left, FocusingType::Cone);
+      ui.focusDirection(LEFT, FocusingType::Linear);
     }
 
     calcStart = micros();
-    if(button3.clickedOnce&&ui.focusedElementID==play.getId()){
+    if(button3.clickedOnce&&ui.focus.focusedElementID==play.getId()){
       ui.focusScene(&test);
     }
     ui.render();
