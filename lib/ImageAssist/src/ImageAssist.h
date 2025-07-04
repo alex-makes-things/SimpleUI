@@ -4,7 +4,7 @@
 #include <memory>
 #include <algorithm>
 #include <functional>
-
+#include <Arduino.h>
 
 namespace ArrUtils{
     int getArrSize8(int width, int height, float scale_fac);
@@ -33,17 +33,16 @@ struct Image8{
     }
 
     
-    /*~Image8(){    This breaks everything
-        if(data){
-            delete[] data;
-        }
-    }*/
+    ~Image8(){
+        delete[] data;
+    }
 
     void setSize(unsigned int s)
     {
         dataSize = s;
     }
     void setData(uint8_t* input) {
+       
         data = input;
     }
     void setColor(uint16_t hue){
@@ -74,40 +73,25 @@ struct Image16{
         data = (uint16_t*)input;
     }
 
-    void setSize(unsigned int s){
+    ~Image16()
+    {
+        delete[] data;
+    }
+
+    inline void setSize(unsigned int s){
         dataSize = s;
     }
-    void setData(uint16_t* input) {
+    inline void setData(uint16_t* input) {
         data = input;
     }
-    void setImg(unsigned int w, unsigned int h, uint16_t* d) {
+    inline void setImg(unsigned int w, unsigned int h, uint16_t* d) {
         width = w;
         height = h;
         data = d;
     }
 };
 
-float mapF(float x, float in_min, float in_max, float out_min, float out_max);
-int zlerp(float v0, float v1, float t);
-float zlerpF(float v0, float v1, float t);
-float zclamp(float n, float min, float max);
-std::shared_ptr<Image16> scale(Image16 input, float scaling_factor);
-std::shared_ptr<Image8> scale(Image8 input, float scaling_factor);
-
-inline std::function<void(Image16 *)> scaled_image16_deleter = [](Image16 *img)
-{
-    if (img)
-    {
-        delete[] img->data; // delete the raw array
-        delete img;         // delete the Image8 object itself
-    }
-};
-
-inline std::function<void(Image8 *)> scaled_image8_deleter = [](Image8 *img)
-{
-    if (img)
-    {
-        delete[] img->data; // delete the raw array
-        delete img;         // delete the Image8 object itself
-    }
-};
+float Fmap(float x, float in_min, float in_max, float out_min, float out_max);
+float Flerp(float v0, float v1, float t);
+Image16 scale(Image16 &input, float scaling_factor);
+Image8 scale(Image8 &input, float scaling_factor);

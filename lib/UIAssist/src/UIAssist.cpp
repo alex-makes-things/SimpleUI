@@ -10,7 +10,7 @@
     @param    scaling Scaling factor of the bitmap
     @param    color 16-bit color with which the bitmap should be drawn
 */
-/**************************************************************************/
+/*************************************************************************
 void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color, GFXcanvas16* canvas){
   if(scaling != 1){
     std::shared_ptr<Image8> scaled = scale(img, scaling);
@@ -19,8 +19,7 @@ void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color, GFXcanv
     canvas->drawBitmap(x,y, img.data, img.width, img.height, color);
   }
 }
-
-
+*/
 
 //--------------------FOCUS STRUCT---------------------------------------------------------------//
 Focus::Focus(std::string ele){
@@ -99,7 +98,7 @@ void Animator::update(){
       //Interpolation
       else{
         if (elapsed<duration){
-          progress = std::clamp(mapF((reverse) ? duration-elapsed : elapsed, 0, duration, initial, final), initial, final);
+          progress = std::clamp(Fmap((reverse) ? duration-elapsed : elapsed, 0, duration, initial, final), initial, final);
 
           } else {
             isDone = true;
@@ -189,9 +188,9 @@ void MonoImage::render(){
       if (draw){
         Point drawing_pos;
         if (m_scale_fac != 1){
-          std::shared_ptr<Image8> scaled = scale(*m_body, m_scale_fac);
-          drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled ->height) : m_position;
-          m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
+          Image8 scaled = scale(*m_body, m_scale_fac);
+          drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled.width, scaled.height) : m_position;
+          m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled.data, scaled.width, scaled.height, m_color);
         }else{
           drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_body->width, m_body->height) : m_position;
           m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height, m_color);
@@ -223,9 +222,9 @@ void RGBImage::render()
     Point drawing_pos;
     if (m_scale_fac != 1)
     {
-      std::shared_ptr<Image16> scaled = scale(*m_body, m_scale_fac);
-      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled->height) : m_position;
-      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height);
+      Image16 scaled = scale(*m_body, m_scale_fac);
+      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled.width, scaled.height) : m_position;
+      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, scaled.data, scaled.width, scaled.height);
     }
     else
     {
@@ -311,11 +310,11 @@ void AnimatedMonoApp::render(){
     Point drawing_pos;
     if (scale_fac != 1)
     {
-      std::shared_ptr<Image8> scaled = scale(*m_showing, scale_fac);
-      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled->width, scaled->height) : m_position;
-      m_width = scaled->width;
-      m_height = scaled->height;
-      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled->data, scaled->width, scaled->height, m_color);
+      Image8 scaled = scale(*m_showing, scale_fac);
+      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled.width, scaled.height) : m_position;
+      m_width = scaled.width;
+      m_height = scaled.height;
+      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled.data, scaled.width, scaled.height, m_color);
     }
     else
     {

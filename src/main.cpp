@@ -146,10 +146,10 @@ void loop() {
     updateButtons(buttons);  //Update button states for every button
     
     if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.focusDirection(RIGHT, FocusingType::Linear);
+      ui.focusDirection(RIGHT, FocusingType::Cone);
     }
     if (button2.clickedOnce&& !button1.clickedOnce ) {
-      ui.focusDirection(LEFT, FocusingType::Linear);
+      ui.focusDirection(LEFT, FocusingType::Cone);
     }
 
     calcStart = micros();

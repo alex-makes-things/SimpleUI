@@ -299,7 +299,9 @@ public:
   std::vector<Scene*> scenes;
   FocusingSettings focusingSettings{64, false, FocusAccuracy::Medium};
 
+#ifdef _ADAFRUIT_GFX_H
   UI(Scene& first_scene, GFXcanvas16& framebuffer);
+#endif
 
   void addScene(Scene* scene);
   void focusScene(Scene* scene);
@@ -307,7 +309,10 @@ public:
   void focusDirection(unsigned int direction, FocusingType alg);
   void update();
   inline bool isFocusingFree(){return !m_focusing_busy;}
+
+#ifdef _ADAFRUIT_GFX_H
   GFXcanvas16 *buffer;
+#endif
 
 private:
   bool m_focusing_busy = false;
