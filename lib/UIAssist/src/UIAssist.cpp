@@ -1,49 +1,60 @@
 #include <UIAssist.h>
 
+//--------------------Cone STRUCT---------------------------------------------------------------//
 
-/**************************************************************************/
 /*!
-   @brief      Easily render a scaled monochrome bitmap to the screen, memory managed.
-    @param    x   Top left corner x coordinate
-    @param    y   Top left corner y coordinate
-    @param    img  Image8 object containing the byte array and size
-    @param    scaling Scaling factor of the bitmap
-    @param    color 16-bit color with which the bitmap should be drawn
-*/
-/*************************************************************************
-void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color, GFXcanvas16* canvas){
-  if(scaling != 1){
-    std::shared_ptr<Image8> scaled = scale(img, scaling);
-    canvas->drawBitmap(x,y, scaled->data, scaled->width, scaled->height, color);
-  }else{
-    canvas->drawBitmap(x,y, img.data, img.width, img.height, color);
-  }
-}
-*/
+    @brief Initialize a cone
+    @param bisector        The angle that indicates the bisector of its aperture (Degrees)
+    @param radius          How far the cone stretches out (Pixels)
+    @param aperture        How wide the cone is (Degrees)
+    @param aperture_step   How many degrees a calculation jumps over the loop of its aperture (Degrees)
+    @param rad_step        How many pixels a calculation jumps over the loop of its radius (Pixels)
+  */
+Cone::Cone(unsigned int bisector, unsigned int radius, unsigned int aperture, unsigned int aperture_step, unsigned int rad_step)
+    :bisector(bisector), radius(radius), aperture(aperture), aperture_step(aperture_step), rad_step(rad_step){}
 
+/*!
+    @brief Represent a 2D point with integer coordinates.
+    @param    x   X coordinate of the point
+    @param    y   Y coordinate of the point
+*/
+Point::Point(int posx, int posy) : x(posx), y(posy){}
 //--------------------FOCUS STRUCT---------------------------------------------------------------//
-Focus::Focus(std::string ele){
-    focusedElementID = ele;
-  }
 
+Focus::Focus(std::string ele):focusedElementID(ele){}
+
+/*!
+    @brief Focus an object by its UUID
+    @param ele The element UUID to focus
+*/
 void Focus::focus(std::string ele){
     previousElementID = focusedElementID;
     focusedElementID = ele;
   }
 
+//This function needs to be called at the end of a cycle, which updates the previous focus id to the current one
 void Focus::update(){
     previousElementID = focusedElementID;
     isFirstBoot = false;
   }
 
+//!@return A boolean that when true, means that the focus has changed in the last cycle
 bool Focus::hasChanged(){
     return (previousElementID != focusedElementID);
   }
 
+/*!
+  @return A boolean that when true, means that the passed object's identity is currently focused
+  @param obj The UUID of the object in cause
+*/
 bool Focus::isFocusing(std::string obj){
     return (focusedElementID == obj);
   }
 
+/*!
+  @return A boolean that when true, means that the passed object's identity is currently focused
+  @param obj The pointer of the object in cause
+*/
 bool Focus::isFocusing(UIElement* obj){
     return (focusedElementID == obj->getId());
   }
@@ -154,7 +165,7 @@ void Animator::invert(){
 
   //--------------------UIElement CLASS---------------------------------------------------------------//
 
-UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy)
+UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy, ElementType element) : type(element)
   {
     m_width = w;
     m_height = h;

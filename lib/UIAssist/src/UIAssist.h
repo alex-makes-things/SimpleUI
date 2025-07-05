@@ -1,5 +1,5 @@
 #pragma once
-#include <ImageAssist.h>
+#include <Image.h>
 #include <vector>
 #include <unordered_map>
 #include <UUIDbuddy.h>
@@ -10,14 +10,6 @@
 #define UP 90
 #define LEFT 180
 #define DOWN 270
-
-using std::string;
-
-//-----------FUNCTION PROTOTYPES----------------//
-
-
-
-//-----------FUNCTION PROTOTYPES----------------//
 
 class UI;
 class UIElement;
@@ -31,31 +23,33 @@ struct Scene;
 struct Focus;
 struct FocusingSettings;
 
+enum class ElementType{UIElement, AnimatedApp, UIImage};
+enum class FocusAccuracy{Low, Medium, High};
+enum class Direction{Up=90, Down=270, Left=180, Right=0};
+enum class FocusingType{Linear, Cone};
+
 struct Point{
-  int x=0;
-  int y=0;
-  Point(int posx=0, int posy=0):x(posx), y(posy){}
+  int x=0;   //X coordinate of the point 
+  int y=0;   //Y coordinate of the point
+  
+  Point(int posx=0, int posy=0);
   bool operator<(const Point &other) const
   {
     return std::tie(x, y) < std::tie(other.x, other.y);
   }
 };
 
+// Holds the parameters necessary for computing a 2D cone with whatever level of detail desired
 struct Cone{
   unsigned int bisector;        //The angle that indicates the bisector of its aperture (Degrees)
   unsigned int radius;          //How far the cone stretches out (Pixels)
   unsigned int aperture;        //How wide the cone is (Degrees)
   unsigned int aperture_step;   //How many degrees a calculation jumps over the loop of its aperture (Degrees)
   unsigned int rad_step;        //How many pixels a calculation jumps over the loop of its radius (Pixels)
-  Cone(unsigned int bisector, unsigned int radius, unsigned int aperture, unsigned int aperture_step, unsigned int rad_step){
-    this->bisector = bisector;
-    this->radius = radius;
-    this->aperture = aperture;
-    this->aperture_step = aperture_step;
-    this->rad_step = rad_step;
-  }
+  Cone(unsigned int bisector, unsigned int radius, unsigned int aperture, unsigned int aperture_step, unsigned int rad_step);
 };
 
+// Holds the parameters necessary for computing a 2D ray with whatever level of detail desired
 struct Ray{
   unsigned int ray_length;
   unsigned int step;
@@ -68,25 +62,14 @@ struct Focus{
   Scene* focusedScene = nullptr;
   bool isFirstBoot = true;
   inline Focus(std::string ele = "");
-  /*!
-    @brief Focus an object by its id
-    @param sc The scene id to focus
-    @param ele The element id to focus
-  */
   inline void focus(std::string ele);
-  //This function needs to be called at the end of void loop(), which updates the previous focus id to the current one
   inline void update();
-  //!@return A boolean that when true, means that the focus has changed in the last cycle
   inline bool hasChanged();
-  /*!
-    @return A boolean that when true, means that the passed object's identity is currently focused
-    @param obj The identity to check if focused
-  */
   inline bool isFocusing(std::string obj);
   inline bool isFocusing(UIElement *obj);
 };
 
-enum class FocusAccuracy{Low, Medium, High};
+
 
 struct FocusingSettings{
   unsigned int max_distance;
@@ -166,18 +149,18 @@ private:
   uint64_t elapsed = 0;            // The amount of time that has passed while the animation was running
 };
 
+//Generic UI element, all interactable elements inherit from this
 class UIElement{
   public:
     Animator anim;
+    const ElementType type;
     bool centered = false; //If true, the element will be drawn with its center being the coordinates passed to the constructor
     bool draw=true; //If true, the element is drawn, if false it's kept hidden.
-    UIElement(unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0);
+    UIElement(unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0, ElementType element = ElementType::UIElement);
     void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
     inline void setPosX(unsigned int X) { m_position.x = X; }
     inline void setPosY(unsigned int Y) { m_position.y = Y; }
-    inline void setPos(unsigned int X, unsigned int Y){
-      m_position.x = X;
-      m_position.y = Y;}
+    inline void setPos(Point pos){m_position=pos;}
     /*!
       @brief Set the UI listener, this allows the element to access its parent UI's attributes and API
       @param listener A pointer to the UI object that "owns" the element
@@ -189,10 +172,7 @@ class UIElement{
     inline unsigned int getWidth() { return m_width; }
     inline unsigned int getHeight() { return m_height; }
     virtual void render() = 0;
-    inline bool isAnimating()
-    {
-      return !(anim.getDone() || anim.getStart());
-    }
+    inline bool isAnimating(){return !(anim.getDone() || anim.getStart());}
     inline bool isFocused();
     inline void setCenter(bool center) { centered = center; }
     Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h);
@@ -205,15 +185,11 @@ class UIElement{
     UI* m_parent_ui;
 };
 
-
+//Used to represent any Image with the tools provided by the library
 class UIImage : public UIElement{
 public:
-  UIImage(Image &img, unsigned int posx = 0, unsigned int posy = 0) : UIElement(img.width, img.height, posx, posy)
-  {
-    m_body = &img;
-  }
-
-  /// @param scale If less than 0, the scale is controlled by the animation.
+  UIImage(Image &img, unsigned int posx = 0, unsigned int posy = 0) : UIElement(img.width, img.height, posx, posy, ElementType::UIImage), m_body(&img){}
+  /// @param scale If negative, the scale is controlled by the animation.
   inline void setScale(float scale){m_scale_fac = scale;
                                     m_overrideAnimationScaling = (scale < 0) ? false : true;}
   inline float getScale() { return m_scale_fac; }
@@ -228,9 +204,10 @@ protected:
   uint16_t m_mono_color = 0xffff;
 };
 
+// This is a heavily interactable element which animates from an Image to another when focused/unfocused, and clicking it can trigger an event
 class AnimatedApp : public UIElement{
   public:
-    AnimatedApp(Image& unfocused, Image& focused, int posx, int posy, bool isCentered):UIElement(unfocused.width, unfocused.height, posx, posy){
+    AnimatedApp(Image& unfocused, Image& focused, int posx, int posy, bool isCentered):UIElement(unfocused.width, unfocused.height, posx, posy, ElementType::AnimatedApp){
       centered = isCentered;
       m_unselected = &unfocused;
       m_selected = &focused;
@@ -251,6 +228,7 @@ class AnimatedApp : public UIElement{
     float m_ratio;
   };
 
+//This is one of the most fundamental blocks of the library, it groups together elements and allows for extreme versatility
 struct Scene{
   std::string name;
   std::string primaryElementID;
@@ -260,8 +238,7 @@ struct Scene{
   inline UIElement* getElementByUUID(std::string UUID);
 };
 
-enum class Direction{Up=90, Down=270, Left=180, Right=0};
-enum class FocusingType{Linear, Cone};
+
 
 namespace UiUtils{
   extern const float degToRadCoefficient;
@@ -274,6 +251,8 @@ namespace UiUtils{
   UIElement* findElementInRay(UIElement *focused, Scene *currentScene, Ray ray);
 }
 
+/*This is the object that has the power over the final frame, this reads inputs, handles focusing, and is responsible for calling the rendering
+functions which modify the final buffer.*/
 class UI{
 public:
   Focus focus;
@@ -296,5 +275,5 @@ public:
 #endif
 
 private:
-  bool m_focusing_busy = false;
+  bool m_focusing_busy = false; //You could see this as sort of a "mutex" to prevent multiple focuses from happening in the same cycle, which could cause undefined behavior
 };

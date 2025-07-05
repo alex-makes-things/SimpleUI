@@ -83,6 +83,12 @@ void handleComms( void *pvParameters){
         Serial.printf("isEnabled: %s\n", obj->anim.getIsEnabled() ? "true" : "false");
         Serial.printf("Reverse: %s\n", obj->anim.getDirection() ? "true" : "false");
         Serial.printf("Draw: %s\n", obj->draw ? "true" : "false");
+        if(obj->type == ElementType::UIElement)
+          Serial.println("Type: UIElement");
+        else if (obj->type == ElementType::UIImage)
+          Serial.println("Type: UIImage");
+        else 
+          Serial.println("Type: AnimatedApp");
       }
     }
     vTaskDelay(pdMS_TO_TICKS(100));
