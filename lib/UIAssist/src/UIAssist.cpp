@@ -173,78 +173,28 @@ bool UIElement::isFocused(){
   return m_parent_ui->focus.focusedElementID==m_UUID;
 }
 
-//--------------------MonoImage CLASS---------------------------------------------------------------//
+//--------------------UIImage CLASS---------------------------------------------------------------//
 
-void MonoImage::setImg(Image8* img){
-      m_body = img;
-      m_width = img->width;
-      m_height = img->height;
-      m_color = img->color;
-    }
-
-void MonoImage::render(){
-      anim.update();
-      m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
-      if (draw){
-        Point drawing_pos;
-        if (m_scale_fac != 1){
-          Image8 scaled = scale(*m_body, m_scale_fac);
-          drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled.width, scaled.height) : m_position;
-          m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled.data, scaled.width, scaled.height, m_color);
-        }else{
-          drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_body->width, m_body->height) : m_position;
-          m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height, m_color);
-        }
-      }
-    }
-
-void MonoImage::setScale(float scale){
-  {
-    m_scale_fac = scale;
-    m_overrideAnimationScaling = (scale < 0) ? false : true;
-  }
-}
-//--------------------RGBImage CLASS---------------------------------------------------------------//
-
-void RGBImage::setImg(Image16 *img)
-{
-  m_body = img;
-  m_width = img->width;
-  m_height = img->height;
-}
-
-void RGBImage::render()
-{
+void UIImage::render(){
   anim.update();
-  m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
-  if (draw)
-  {
-    Point drawing_pos;
-    if (m_scale_fac != 1)
-    {
-      Image16 scaled = scale(*m_body, m_scale_fac);
-      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled.width, scaled.height) : m_position;
-      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, scaled.data, scaled.width, scaled.height);
+  
+  if (draw){
+    m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
+    Image drawing_image = m_scale_fac != 1 ? scale(*m_body, m_scale_fac) : *m_body;
+    Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+
+    if(drawing_image.data.colorspace == PixelType::Mono){
+      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
     }
-    else
-    {
-      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_body->width, m_body->height) : m_position;
-      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, m_body->data, m_body->width, m_body->height);
+    else{
+      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
     }
   }
 }
 
-void RGBImage::setScale(float scale)
-{
-  {
-    m_scale_fac = scale;
-    m_overrideAnimationScaling = (scale < 0) ? false : true;
-  }
-}
+//--------------------AnimatedApp CLASS---------------------------------------------------------------//
 
-//--------------------AnimatedMonoApp CLASS---------------------------------------------------------------//
-
-void AnimatedMonoApp::handleAppSelectionAnimation(){
+void AnimatedApp::handleAppSelectionAnimation(){
   if (m_parent_ui->focus.hasChanged() || (m_parent_ui->focus.isFirstBoot && isFocused()))
   {
     if(isFocused()){  
@@ -301,27 +251,19 @@ void AnimatedMonoApp::handleAppSelectionAnimation(){
   }
 }
 
-void AnimatedMonoApp::render(){
+void AnimatedApp::render(){
   handleAppSelectionAnimation();
   anim.update();
   float scale_fac = anim.getProgress();
-  if (draw)
-  {
-    Point drawing_pos;
-    if (scale_fac != 1)
-    {
-      Image8 scaled = scale(*m_showing, scale_fac);
-      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, scaled.width, scaled.height) : m_position;
-      m_width = scaled.width;
-      m_height = scaled.height;
-      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, scaled.data, scaled.width, scaled.height, m_color);
+  if (draw){
+    Image drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
+    Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+
+    if(drawing_image.data.colorspace == PixelType::Mono){
+      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
     }
-    else
-    {
-      drawing_pos = (centered) ? centerToCornerPos(m_position.x, m_position.y, m_showing->width, m_showing->height) : m_position;
-      m_width = m_showing->width;
-      m_height = m_showing->height;
-      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, m_showing->data, m_showing->width, m_showing->height, m_color);
+    else{
+      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
     }
   }
 }
@@ -394,16 +336,6 @@ void UI::update(){
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
 const float UiUtils::degToRadCoefficient= 0.01745329251;
-
-bool UiUtils::areStill(std::vector<MonoImage*> images){
-    int count = 0;
-    for (MonoImage* image : images) {
-      if(image->anim.getDone() || image->anim.getStart()){
-        count++;
-      }
-    }
-      return (count == images.size()) ? true : false;
-  }
 
 bool UiUtils::isPointInElement(Point point, UIElement* element){
     Point element_pos = element->getPos();

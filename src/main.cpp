@@ -27,25 +27,22 @@ Button button2(25);
 Button button3(27);
 std::vector<Button*> buttons = {&button1, &button2, &button3};
 
-Image8 playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test, 0xffff);
-Image8 smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test, 0xffff);
+Image playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test);
+Image smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test);
 
-Image8 largeGallery(HOME_LARGE_GALLERY_SIZE, HOME_LARGE_GALLERY_SIZE, home_large_gallery, 0xffff);
-Image8 smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small_gallery, 0xffff);
+Image largeGallery(HOME_LARGE_GALLERY_SIZE, HOME_LARGE_GALLERY_SIZE, home_large_gallery);
+Image smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small_gallery);
 
-Image8 largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings, 0xffff);
-Image8 smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings, 0xffff);
+Image largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings);
+Image smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
-Image16 landscape(SCREENWIDTH, SCREENHEIGHT, nicerlandscape);
-RGBImage nicelandscape(landscape, 0,0);
 
-AnimatedMonoApp play(smallPlayTest, playTest, 64, 32, true);
-AnimatedMonoApp settings(smallSettings, largeSettings, 25, 32, true);
-AnimatedMonoApp gallery(smallGallery, largeGallery, 103, 32, true);
+AnimatedApp play(smallPlayTest, playTest, 64, 32, true);
+AnimatedApp settings(smallSettings, largeSettings, 25, 32, true);
+AnimatedApp gallery(smallGallery, largeGallery, 103, 32, true);
 
 std::vector<UIElement*> elements = {&play, &settings, &gallery};
 Scene home(elements, play);
-Scene test({&nicelandscape}, nicelandscape);
 UI ui(home, canvas);
 //--------------------------UI SETUP-----------------------------//
 
@@ -92,8 +89,6 @@ void handleComms( void *pvParameters){
   }
 }
 
-
-
 void setup() {
   setupButtons(buttons);
   Serial.begin(115200);
@@ -101,9 +96,9 @@ void setup() {
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
-  ui.addScene(&test);
-  nicelandscape.setScale(1);
+  #if defined(ESP32)
   xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
+  #endif
 }
 
 //-------------BEFORE LOOP----------------//
@@ -115,7 +110,8 @@ uint64_t start = micros(), calcStart = micros();
 bool render_frametime = true;
 unsigned int frameTime=0;
 unsigned int calculationsTime=0;
-uint16_t debugColor = 0xfc60; // Use a valid 16-bit color value (e.g., 0xfc60)
+uint16_t debugColor = 0xfc60;
+
 //-------------SETTINGS----------------//
 
 void framerate(bool render){
@@ -127,18 +123,32 @@ void framerate(bool render){
     canvas.print(frameTime);
   }
 }
-
 void computeTime(bool render){
   if(render){
-    canvas.setCursor(64,50);
+    canvas.setCursor(54,50);
     canvas.setTextSize(2);
     canvas.setTextColor(ST7735_RED);
     canvas.setTextWrap(false);
     canvas.print(calculationsTime);
   }
 }
+/**************************************************************************/
+/*!
+   @brief      A blazingly fast method for drawing an RGB bitmap to the screen
+    @param    x   Top left corner x coordinate
+    @param    y   Top left corner y coordinate
+    @param    bitmap  byte array with monochrome bitmap
+    @param    w   Width of bitmap in pixels
+    @param    h   Height of bitmap in pixels
+*/
+/**************************************************************************/
+inline __attribute__((always_inline))
+void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
+{
+  tft.setAddrWindow(x, y, w, h);
+  tft.writePixels(bitmap, 8192, false);
+}
 
-void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h);
 
 void loop() {
     canvas.fillScreen(0x0000); //Fill the background with a black frame
@@ -153,12 +163,9 @@ void loop() {
     }
 
     calcStart = micros();
-    if(button3.clickedOnce&&ui.focus.focusedElementID==play.getId()){
-      ui.focusScene(&test);
-    }
     ui.render();
     calculationsTime = micros() - calcStart;
-    
+
     computeTime(render_frametime);
     framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
@@ -168,22 +175,4 @@ void loop() {
     ui.update();
     frameTime = micros()-start;
     start = micros();
-}
-
-/**************************************************************************/
-/*!
-   @brief      A blazingly fast method for drawing an RGB bitmap to the screen
-    @param    x   Top left corner x coordinate
-    @param    y   Top left corner y coordinate
-    @param    bitmap  byte array with monochrome bitmap
-    @param    w   Width of bitmap in pixels
-    @param    h   Height of bitmap in pixels
-*/
-/**************************************************************************/
-void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
-{
-  tft.startWrite();
-  tft.setAddrWindow(x, y, w, h);
-  tft.writePixels(bitmap, w * h, false);
-  tft.endWrite();
 }

@@ -15,16 +15,15 @@ using std::string;
 
 //-----------FUNCTION PROTOTYPES----------------//
 
-void renderBmp8(int x, int y, Image8 img, float scaling, uint16_t color, GFXcanvas16 *canvas);
+
 
 //-----------FUNCTION PROTOTYPES----------------//
 
 class UI;
 class UIElement;
-class MonoImage;
-class AnimatedMonoApp;
+class AnimatedApp;
 class Animator;
-class RGBImage;
+class UIImage;
 struct Point;
 struct Cone;
 struct Ray;
@@ -128,7 +127,7 @@ class Animator{
   //Set the reverse setting to the passed bool
   inline void setReverse(bool rev);
   //Starts the animation
-  inline void start();
+  void start();
   //Pauses the animation
   void stop();
   //Switches the enable key, if true it becomes false and viceversa
@@ -206,49 +205,32 @@ class UIElement{
     UI* m_parent_ui;
 };
 
-class MonoImage : public UIElement{
-  public:
-    MonoImage(Image8& img, unsigned int posx=0, unsigned int posy=0):UIElement(img.width, img.height, posx, posy){
-        m_body = &img;
-    }
 
-    /// @param scale If less than 0, the scale is controlled by the animation.
-    void setScale(float scale);
-    inline float getScale() { return m_scale_fac; }
-    inline void setColor(uint16_t hue) { m_color = hue; }
-    inline void setImg(Image8 *img);
-    inline Image8 *getImg() { return m_body; }
-    void render() override;
-
-  protected:
-    Image8* m_body;
-    float m_scale_fac=1;
-    uint16_t m_color = 0xffff;
-};
-
-class RGBImage : public UIElement
-{
+class UIImage : public UIElement{
 public:
-  RGBImage(Image16 &img, unsigned int posx = 0, unsigned int posy = 0) : UIElement(img.width, img.height, posx, posy)
+  UIImage(Image &img, unsigned int posx = 0, unsigned int posy = 0) : UIElement(img.width, img.height, posx, posy)
   {
     m_body = &img;
   }
 
   /// @param scale If less than 0, the scale is controlled by the animation.
-  void setScale(float scale);
+  inline void setScale(float scale){m_scale_fac = scale;
+                                    m_overrideAnimationScaling = (scale < 0) ? false : true;}
   inline float getScale() { return m_scale_fac; }
-  inline void setImg(Image16 *img);
-  inline Image16 *getImg() { return m_body; }
+  inline void setColor(uint16_t hue) { m_mono_color = hue; }
+  inline void setImg(Image *img){m_body = img; m_width = img->width; m_height = img->height;}
+  inline Image *getImg() { return m_body; }
   void render() override;
 
 protected:
-  Image16 *m_body;
+  Image *m_body;
   float m_scale_fac = 1;
+  uint16_t m_mono_color = 0xffff;
 };
 
-class AnimatedMonoApp : public UIElement{
+class AnimatedApp : public UIElement{
   public:
-    AnimatedMonoApp(Image8& unfocused, Image8& focused, int posx, int posy, bool isCentered):UIElement(unfocused.width, unfocused.height, posx, posy){
+    AnimatedApp(Image& unfocused, Image& focused, int posx, int posy, bool isCentered):UIElement(unfocused.width, unfocused.height, posx, posy){
       centered = isCentered;
       m_unselected = &unfocused;
       m_selected = &focused;
@@ -258,14 +240,14 @@ class AnimatedMonoApp : public UIElement{
     }
     
     void render() override;
-    inline Image8* getActive(){return m_showing;}
-    inline void setColor(uint16_t hue){m_color = hue;}
+    inline Image* getActive(){return m_showing;}
+    inline void setColor(uint16_t hue){m_mono_color = hue;}
   protected:
     void handleAppSelectionAnimation();
-    uint16_t m_color = 0xffff;
-    Image8* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
-    Image8* m_selected = nullptr;  //This points to the image that is displayed when the element is focused
-    Image8* m_showing = nullptr;  //This points to the image that is currently being displayed
+    uint16_t m_mono_color = 0xffff;
+    Image* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
+    Image* m_selected = nullptr;  //This points to the image that is displayed when the element is focused
+    Image* m_showing = nullptr;  //This points to the image that is currently being displayed
     float m_ratio;
   };
 
@@ -283,7 +265,6 @@ enum class FocusingType{Linear, Cone};
 
 namespace UiUtils{
   extern const float degToRadCoefficient;
-  bool areStill(std::vector<MonoImage*> images);
   bool isPointInElement(Point point, UIElement* element);
   Point centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h);
   UIElement* SignedDistance(unsigned int direction, FocusingSettings settings, FocusingType alg, Scene *scene, UIElement *focused);
