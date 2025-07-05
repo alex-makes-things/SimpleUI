@@ -7,6 +7,35 @@ float Fmap(float x, float in_min, float in_max, float out_min, float out_max)
 float Flerp(float v0, float v1, float t) {
   return (1 - t) * v0 + t * v1;
 }
+bool dirtyRects(Image first, Image second){
+    if(!(first.width == second.width && first.height == second.height && first.data.colorspace == second.data.colorspace)) return false;
+    bool areDifferent=true;
+    size_t len = first.width * first.height;
+    switch(first.data.colorspace){
+        case PixelType::Mono:
+        for(size_t i = 0; i<len; i++){
+            if(first.data.mono[i] != second.data.mono[i]){
+                areDifferent=false;
+                first.data.mono[i] = second.data.mono[i];
+            }
+        }
+        break;
+
+        case PixelType::RGB565:
+        for(size_t i = 0; i<len; i++){
+            if(first.data.mono[i] != second.data.mono[i]){
+                areDifferent=false;
+                first.data.mono[i] = second.data.mono[i];
+            }
+        }
+    }
+    return areDifferent;
+}
+void transferFrame(uint16_t* emitter, uint16_t* receiver, size_t len){
+    for(size_t i=0; i < len; i++){
+        receiver[i] = emitter[i];
+    }
+}
 
 int ArrUtils::getArrSize8(int width, int height, float scale_fac) {
         int w = static_cast<int>(width * scale_fac);
@@ -14,7 +43,6 @@ int ArrUtils::getArrSize8(int width, int height, float scale_fac) {
         int bytes_per_row = (w + 7) / 8;  // round up to nearest byte
         return bytes_per_row * h;
     }
-
 int ArrUtils::getArrSize16 (int width, int height, float scale_fac){
     return (static_cast<int>(width * scale_fac) * static_cast<int>(height * scale_fac));
     }

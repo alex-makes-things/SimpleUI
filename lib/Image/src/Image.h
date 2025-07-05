@@ -44,7 +44,8 @@ struct Image{
     }
 };
 
-
+void transferFrame(uint16_t* emitter, uint16_t* receiver, size_t len);
+bool dirtyRects(Image first, Image second);
 float Fmap(float x, float in_min, float in_max, float out_min, float out_max);
 float Flerp(float v0, float v1, float t);
 Image scale(Image &input, float scaling_factor);

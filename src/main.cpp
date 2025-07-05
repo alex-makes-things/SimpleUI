@@ -155,6 +155,10 @@ void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
   tft.writePixels(bitmap, 8192, false);
 }
 
+uint16_t buffer[8192];
+
+Image current(128, 64, canvas.getBuffer());
+Image prev(128, 64, buffer);
 
 void loop() {
     canvas.fillScreen(0x0000); //Fill the background with a black frame
@@ -172,13 +176,18 @@ void loop() {
     ui.render();
     calculationsTime = micros() - calcStart;
 
-    computeTime(render_frametime);
-    framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
-    fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
+    //computeTime(render_frametime);
+    //framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
+    
+
+    if(!dirtyRects(prev, current))
+      fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
+
     
   //TEMPORAL VARIABLES AND FUNCTIONS
     rememberButtons(buttons);
     ui.update();
     frameTime = micros()-start;
+    Serial.println(frameTime);
     start = micros();
 }
