@@ -22,11 +22,13 @@ struct Ray;
 struct Scene;
 struct Focus;
 struct FocusingSettings;
+struct Outline;
 
 enum class ElementType{UIElement, AnimatedApp, UIImage};
-enum class FocusAccuracy{Low, Medium, High};
+enum class Quality{Low, Medium, High};
 enum class Direction{Up=90, Down=270, Left=180, Right=0};
-enum class FocusingType{Linear, Cone};
+enum class FocusingAlgorithm{Linear, Cone};
+enum class FocusStyle{None, Animation, Outline, Color};
 
 struct Point{
   int x=0;   //X coordinate of the point 
@@ -36,6 +38,30 @@ struct Point{
   bool operator<(const Point &other) const
   {
     return std::tie(x, y) < std::tie(other.x, other.y);
+  }
+
+  Point& operator+=(int value) {
+    x += value;
+    y += value;
+    return *this;
+  }
+  
+  Point& operator++(int) {
+    x++;
+    y++;
+    return *this;
+  }
+
+  Point& operator--(int) {
+    x--;
+    y--;
+    return *this;
+  }
+
+  Point& operator-=(int value) {
+    x -= value;
+    y -= value;
+    return *this;
   }
 };
 
@@ -69,12 +95,17 @@ struct Focus{
   inline bool isFocusing(UIElement *obj);
 };
 
-
-
 struct FocusingSettings{
   unsigned int max_distance;
-  bool outline;
-  FocusAccuracy accuracy;
+  Quality accuracy;
+};
+
+struct Outline{
+  unsigned int thickness; 
+  unsigned int border_distance;
+  unsigned int radius;
+  uint16_t color;
+  Outline(unsigned int thickness=1, unsigned int distance=0, unsigned int radius = 0, uint16_t color=0xffff) : thickness(thickness), border_distance(distance), color(color), radius(radius){}
 };
 
 class Animator{
@@ -154,9 +185,11 @@ class UIElement{
   public:
     Animator anim;
     const ElementType type;
+    FocusStyle focus_style;
+    Outline outline;
     bool centered = false; //If true, the element will be drawn with its center being the coordinates passed to the constructor
     bool draw=true; //If true, the element is drawn, if false it's kept hidden.
-    UIElement(unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0, ElementType element = ElementType::UIElement);
+    UIElement(unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None);
     void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
     inline void setPosX(unsigned int X) { m_position.x = X; }
     inline void setPosY(unsigned int Y) { m_position.y = Y; }
@@ -171,13 +204,13 @@ class UIElement{
     inline Point getPos() { return m_position; }
     inline unsigned int getWidth() { return m_width; }
     inline unsigned int getHeight() { return m_height; }
-    virtual void render() = 0;
+    virtual void render();
     inline bool isAnimating(){return !(anim.getDone() || anim.getStart());}
     inline bool isFocused();
     inline void setCenter(bool center) { centered = center; }
     Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h);
-
   protected:
+    void drawOutline();
     Point m_position;
     bool m_overrideAnimationScaling = false;
     unsigned int m_width=0, m_height=0;
@@ -188,7 +221,7 @@ class UIElement{
 //Used to represent any Image with the tools provided by the library
 class UIImage : public UIElement{
 public:
-  UIImage(Image &img, unsigned int posx = 0, unsigned int posy = 0) : UIElement(img.width, img.height, posx, posy, ElementType::UIImage), m_body(&img){}
+  UIImage(Image &img, unsigned int posx = 0, unsigned int posy = 0, FocusStyle focus_style = FocusStyle::None): UIElement(img.width, img.height, posx, posy, ElementType::UIImage, focus_style), m_body(&img){}
   /// @param scale If negative, the scale is controlled by the animation.
   inline void setScale(float scale){m_scale_fac = scale;
                                     m_overrideAnimationScaling = (scale < 0) ? false : true;}
@@ -207,7 +240,7 @@ protected:
 // This is a heavily interactable element which animates from an Image to another when focused/unfocused, and clicking it can trigger an event
 class AnimatedApp : public UIElement{
   public:
-    AnimatedApp(Image& unfocused, Image& focused, int posx, int posy, bool isCentered):UIElement(unfocused.width, unfocused.height, posx, posy, ElementType::AnimatedApp){
+    AnimatedApp(Image& unfocused, Image& focused, int posx, int posy, bool isCentered, FocusStyle focus_style):UIElement(unfocused.width, unfocused.height, posx, posy, ElementType::AnimatedApp, focus_style){
       centered = isCentered;
       m_unselected = &unfocused;
       m_selected = &focused;
@@ -244,7 +277,7 @@ namespace UiUtils{
   extern const float degToRadCoefficient;
   bool isPointInElement(Point point, UIElement* element);
   Point centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h);
-  UIElement* SignedDistance(unsigned int direction, FocusingSettings settings, FocusingType alg, Scene *scene, UIElement *focused);
+  UIElement* SignedDistance(unsigned int direction, FocusingSettings settings, FocusingAlgorithm alg, Scene *scene, UIElement *focused);
   Point polarToCartesian(float radius, float angle);
   std::set<Point> computeConePoints(Point vertex, Cone cone);
   UIElement* findElementInCone(UIElement* focused, Scene* currentScene, Cone cone);
@@ -257,7 +290,7 @@ class UI{
 public:
   Focus focus;
   std::vector<Scene*> scenes;
-  FocusingSettings focusingSettings{64, false, FocusAccuracy::Medium};
+  FocusingSettings focusingSettings{64, Quality::Medium};
 
 #ifdef _ADAFRUIT_GFX_H
   UI(Scene& first_scene, GFXcanvas16& framebuffer);
@@ -266,7 +299,7 @@ public:
   void addScene(Scene* scene);
   void focusScene(Scene* scene);
   void render(){focus.focusedScene->renderScene();}
-  void focusDirection(unsigned int direction, FocusingType alg);
+  void focusDirection(unsigned int direction, FocusingAlgorithm alg);
   void update();
   inline bool isFocusingFree(){return !m_focusing_busy;}
 

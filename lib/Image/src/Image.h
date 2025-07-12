@@ -8,7 +8,7 @@ namespace ArrUtils{
     int getArrSize16 (int width, int height, float scale_fac);
 }
 
-enum class PixelType{Mono, RGB565};
+enum class PixelType{Mono=1, RGB565=16};
 
 //A wrapper for supporting multiple data types used in the Image structure
 struct ImageData{
@@ -26,7 +26,6 @@ struct ImageData{
 struct Image{
     unsigned int width, height;
     ImageData data;
-    bool ownsData = false;
 
     Image(unsigned int w=0, unsigned int h=0, uint8_t* input=nullptr, bool owner = false) : width(w), height(h), data(PixelType::Mono, input), ownsData(owner){}
     Image(unsigned int w, unsigned int h, uint16_t *input, bool owner = false) : width(w), height(h), data(PixelType::RGB565, input), ownsData(owner) {}
@@ -42,6 +41,8 @@ struct Image{
             }
         }
     }
+    private:
+    bool ownsData = false;
 };
 
 void transferFrame(uint16_t* emitter, uint16_t* receiver, size_t len);

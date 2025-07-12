@@ -163,30 +163,69 @@ void Animator::invert(){
     now = currentTime;
   }
 
-  //--------------------UIElement CLASS---------------------------------------------------------------//
+//--------------------UIElement CLASS---------------------------------------------------------------//
 
-UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy, ElementType element) : type(element)
-  {
-    m_width = w;
-    m_height = h;
-    m_position = Point(posx, posy);
-  }
+UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy, ElementType element, FocusStyle style) 
+: type(element), m_width(w), m_height(h), m_position(Point(posx, posy)), focus_style(style){}
 
 Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
-      unsigned int new_x = floor((float)x_pos-((float)w/2));
-      unsigned int new_y = floor((float)y_pos-((float)h/2));
+      unsigned int new_x = static_cast<unsigned int>(static_cast<float>(x_pos)-(static_cast<float>(w)/2.0f));
+      unsigned int new_y = static_cast<unsigned int>(static_cast<float>(y_pos)-(static_cast<float>(h)/2.0f));
       return Point(new_x, new_y);
     }
-
-
 
 bool UIElement::isFocused(){
   return m_parent_ui->focus.focusedElementID==m_UUID;
 }
 
+void UIElement::drawOutline(){
+  if (focus_style == FocusStyle::Outline && isFocused()) {
+
+    Point rect_drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, m_width, m_height) : m_position;
+    rect_drawing_pos -= (outline.border_distance + 1);
+    int16_t draw_width = m_width + outline.border_distance*2 +2;
+    int16_t draw_height = m_height + outline.border_distance*2 +2;
+
+
+    if(outline.radius != 0){
+      int16_t draw_radius = outline.radius;
+      for (int i = 0; i < outline.thickness; i++) {
+        m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, outline.color);
+        if (!(i % 2)){
+          int16_t temp_r = draw_radius + 1;
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 8, outline.color);
+        }
+        
+        draw_width += 2;
+        draw_height += 2; 
+        rect_drawing_pos--;
+        draw_radius++;
+      }
+    }
+    else{
+
+      for (int i = 0; i < outline.thickness; i++) {
+        m_parent_ui->buffer->drawRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, outline.color);
+        draw_width += 2;
+        draw_height += 2;
+        rect_drawing_pos--;
+      }
+
+    }
+  }
+}
+
+void UIElement::render(){
+  drawOutline();
+}
+
 //--------------------UIImage CLASS---------------------------------------------------------------//
 
 void UIImage::render(){
+  drawOutline();
   anim.update();
   
   if (draw){
@@ -263,7 +302,11 @@ void AnimatedApp::handleAppSelectionAnimation(){
 }
 
 void AnimatedApp::render(){
-  handleAppSelectionAnimation();
+  switch(focus_style){
+    case FocusStyle::Animation: handleAppSelectionAnimation();
+    case FocusStyle::Outline: drawOutline();
+  }
+ 
   anim.update();
   float scale_fac = anim.getProgress();
   if (draw){
@@ -327,8 +370,8 @@ void UI::focusScene(Scene* scene){
 
 /// @brief Focus the closest object in any direction
 /// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
-/// @param alg The focusing algorithm that you want to use (FocusingType::Linear, FocusingType::Cone)
-void UI::focusDirection(unsigned int direction, FocusingType alg){
+/// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
+void UI::focusDirection(unsigned int direction, FocusingAlgorithm alg){
   if(isFocusingFree()){
     m_focusing_busy = true;
     UIElement* next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.focusedScene, focus.focusedScene->getElementByUUID(focus.focusedElementID));
@@ -362,25 +405,25 @@ Point UiUtils::centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h){
       return Point(new_x, new_y);
   }
 
-UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings settings, FocusingType alg, Scene* scene, UIElement* focused){
+UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings settings, FocusingAlgorithm alg, Scene* scene, UIElement* focused){
 
     Point center_point = (focused->centered) ? focused->getPos() 
                                                    : UiUtils::centerPos(focused->getPos().x, focused->getPos().y, focused->getWidth(), focused->getHeight());
     Scene temporaryScene = *scene;
     temporaryScene.elements.erase(focused->getId());
     Point new_point = center_point;
-    if (alg == FocusingType::Linear)
+    if (alg == FocusingAlgorithm::Linear)
     {
       Ray ray{settings.max_distance, 1, direction};
       switch (settings.accuracy)
       {
-      case FocusAccuracy::Low:
+      case Quality::Low:
         ray.step = 4;
         break;
-      case FocusAccuracy::Medium:
+      case Quality::Medium:
         ray.step = 2;
         break;
-      case FocusAccuracy::High:
+      case Quality::High:
         ray.step = 1;
         break;
       }
@@ -391,15 +434,15 @@ UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings sett
     {
       Cone cone(direction, settings.max_distance, 90, 2, 6);
       switch (settings.accuracy){
-        case FocusAccuracy::Low:
+        case Quality::Low:
           cone.aperture_step = 3;
           cone.rad_step = 8;
           break;
-        case FocusAccuracy::Medium:
+        case Quality::Medium:
           cone.aperture_step = 2;
           cone.rad_step = 6;
           break;
-        case FocusAccuracy::High:
+        case Quality::High:
           cone.aperture_step = 1;
           cone.rad_step = 2;
           break;
