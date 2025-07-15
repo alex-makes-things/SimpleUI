@@ -165,12 +165,12 @@ void Animator::invert(){
 
 //--------------------UIElement CLASS---------------------------------------------------------------//
 
-UIElement::UIElement(unsigned int w, unsigned int h, unsigned int posx, unsigned int posy, ElementType element, FocusStyle style) 
-: type(element), m_width(w), m_height(h), m_position(Point(posx, posy)), focus_style(style){}
+UIElement::UIElement(unsigned int w, unsigned int h, Point pos, ElementType element, FocusStyle style) 
+: type(element), m_width(w), m_height(h), m_position(pos), focus_style(style){}
 
 Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
-      unsigned int new_x = static_cast<unsigned int>(static_cast<float>(x_pos)-(static_cast<float>(w)/2.0f));
-      unsigned int new_y = static_cast<unsigned int>(static_cast<float>(y_pos)-(static_cast<float>(h)/2.0f));
+      unsigned int new_x = static_cast<unsigned int>(static_cast<float>(x_pos)-(static_cast<float>(w)*0.5f));
+      unsigned int new_y = static_cast<unsigned int>(static_cast<float>(y_pos)-(static_cast<float>(h)*0.5f));
       return Point(new_x, new_y);
     }
 
@@ -178,25 +178,25 @@ bool UIElement::isFocused(){
   return m_parent_ui->focus.focusedElementID==m_UUID;
 }
 
-void UIElement::drawOutline(){
+void UIElement::drawFocusOutline(){
   if (focus_style == FocusStyle::Outline && isFocused()) {
 
-    Point rect_drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, m_width, m_height) : m_position;
-    rect_drawing_pos -= (outline.border_distance + 1);
-    int16_t draw_width = m_width + outline.border_distance*2 +2;
-    int16_t draw_height = m_height + outline.border_distance*2 +2;
+    Point rect_drawing_pos = getDrawPoint();
+    rect_drawing_pos -= (focus_outline.border_distance + 1);
+    int16_t draw_width = m_width + focus_outline.border_distance*2 +2;
+    int16_t draw_height = m_height + focus_outline.border_distance*2 +2;
 
 
-    if(outline.radius != 0){
-      int16_t draw_radius = outline.radius;
-      for (int i = 0; i < outline.thickness; i++) {
-        m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, outline.color);
+    if(focus_outline.radius != 0){
+      int16_t draw_radius = focus_outline.radius;
+      for (int i = 0; i < focus_outline.thickness; i++) {
+        m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, focus_outline.color);
         if (!(i % 2)){
           int16_t temp_r = draw_radius + 1;
-          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, outline.color);
-          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, outline.color);
-          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, outline.color);
-          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 8, outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, focus_outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, focus_outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, focus_outline.color);
+          m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 8, focus_outline.color);
         }
         
         draw_width += 2;
@@ -207,8 +207,8 @@ void UIElement::drawOutline(){
     }
     else{
 
-      for (int i = 0; i < outline.thickness; i++) {
-        m_parent_ui->buffer->drawRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, outline.color);
+      for (int i = 0; i < focus_outline.thickness; i++) {
+        m_parent_ui->buffer->drawRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, focus_outline.color);
         draw_width += 2;
         draw_height += 2;
         rect_drawing_pos--;
@@ -219,13 +219,21 @@ void UIElement::drawOutline(){
 }
 
 void UIElement::render(){
-  drawOutline();
+  drawFocusOutline();
+}
+
+Point UIElement::getDrawPoint(){
+  return centered ? centerToCornerPos(m_position.x, m_position.y, m_width, m_height) : m_position;
+}
+
+Point UIElement::getCenterPoint(){
+  return centered ? m_position : UiUtils::centerPos(m_position.x, m_position.y, m_width, m_height);
 }
 
 //--------------------UIImage CLASS---------------------------------------------------------------//
 
 void UIImage::render(){
-  drawOutline();
+  drawFocusOutline();
   anim.update();
   
   if (draw){
@@ -244,7 +252,7 @@ void UIImage::render(){
 
 //--------------------AnimatedApp CLASS---------------------------------------------------------------//
 
-void AnimatedApp::handleAppSelectionAnimation(){
+void AnimatedApp::m_drawAnimation(){
   if (m_parent_ui->focus.hasChanged() || (m_parent_ui->focus.isFirstBoot && isFocused()))
   {
     if(isFocused()){  
@@ -302,12 +310,10 @@ void AnimatedApp::handleAppSelectionAnimation(){
 }
 
 void AnimatedApp::render(){
-  switch(focus_style){
-    case FocusStyle::Animation: handleAppSelectionAnimation();
-    case FocusStyle::Outline: drawOutline();
-  }
- 
   anim.update();
+  if (focus_style == FocusStyle::Animation)
+    m_drawAnimation();
+ 
   float scale_fac = anim.getProgress();
   if (draw){
     Image drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
@@ -318,6 +324,78 @@ void AnimatedApp::render(){
     }
     else{
       m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
+    }
+  }
+}
+
+//--------------------Checkbox CLASS---------------------------------------------------------------//
+
+
+
+/*!
+    @brief Create a checkbox element.
+    @param style        External outline
+    @param pos          Top left corner coordinates
+    @param width        Total width in pixels
+    @param height       Total height in pixels
+    @param fillcolor    RGB565 color of the inside fill
+    @param isCentered   Is the element centered around the provided coordinates?
+    @param focus_style  What method is used to signal a focus
+*/
+Checkbox::Checkbox(Outline style, Point pos, unsigned int width, unsigned int height, uint16_t fillColor,bool isCentered=false, FocusStyle focus_style)
+    :UIElement(width, height, pos, ElementType::Checkbox, focus_style), outline(style), selection_color(fillColor){
+      centered = isCentered;
+      focus_outline.border_distance=0U;
+      outline.radius = std::clamp(outline.radius, 0U, static_cast<unsigned int>((width >= height ? height : width)*0.5f));
+    }
+
+void Checkbox::m_drawCheckboxOutline(){
+ 
+  int16_t draw_width = m_width;
+  int16_t draw_height = m_height;
+  Point rect_drawing_pos = getDrawPoint();
+
+  if(outline.radius!=0){
+    int16_t draw_radius = outline.radius+outline.thickness;
+    for (int i = outline.thickness; i > 0 ; i--) {
+      m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, outline.color);
+      if (!(i % 2)){
+        int16_t temp_r = draw_radius + 1;
+        m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, outline.color);
+        m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, outline.color);
+        m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, outline.color);
+        m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 8, outline.color);
+      }
+      
+      draw_width -= 2;
+      draw_height -= 2; 
+      rect_drawing_pos++;
+      draw_radius--;
+    }
+  }
+  else{
+    
+    for (int i = outline.thickness; i > 0 ; i--) {
+      m_parent_ui->buffer->drawRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, outline.color);
+      draw_width -= 2;
+      draw_height -= 2;
+      rect_drawing_pos++;
+    }
+  }
+}
+
+void Checkbox::render(){
+  m_drawCheckboxOutline();
+  if(m_state){
+    Point fill_pos = getDrawPoint();
+    unsigned int offset = outline.border_distance+outline.thickness;
+    fill_pos+=offset;
+    offset=outline.border_distance*4;
+    if(outline.radius!=0){
+      m_parent_ui->buffer->fillRoundRect(fill_pos.x, fill_pos.y, m_width-offset, m_height-offset, outline.radius-outline.border_distance, selection_color);
+    }
+    else{
+      m_parent_ui->buffer->fillRect(fill_pos.x, fill_pos.y, m_width-offset, m_height-offset, selection_color);
     }
   }
 }
@@ -337,6 +415,8 @@ void Scene::renderScene()
     for (auto elem : elements)
     {
       elem.second->render();
+      if(elem.second->isFocused()&&elem.second->focus_style==FocusStyle::Outline)
+        elem.second->drawFocusOutline();
     }
   }
 
@@ -344,25 +424,25 @@ UIElement* Scene::getElementByUUID(std::string UUID){
   return elements.at(UUID);
 }
 
-  //--------------------UI CLASS---------------------------------------------------------------//
+//--------------------UI CLASS---------------------------------------------------------------//
 
-  UI::UI(Scene& first_scene, GFXcanvas16& framebuffer)
-  {
-    focus = Focus(first_scene.primaryElementID);
-    buffer = &framebuffer;
-    addScene(&first_scene);
-    focusScene(&first_scene);
-  }
+UI::UI(Scene& first_scene, GFXcanvas16& framebuffer)
+{
+  focus = Focus(first_scene.primaryElementID);
+  buffer = &framebuffer;
+  addScene(first_scene);
+  focusScene(first_scene);
+}
 
-void UI::addScene(Scene* scene){
-    scenes.push_back(scene);                 //KEEP IN MIND "REALLOCATES"
-    for(auto elem : scene->elements){
+void UI::addScene(Scene& scene){
+    scenes.push_back(&scene);                 //KEEP IN MIND "REALLOCATES"
+    for(auto elem : scene.elements){
       elem.second->setUiListener(this);
     }
   }
 
-void UI::focusScene(Scene* scene){
-    focus.focusedScene = scene;
+void UI::focusScene(Scene& scene){
+    focus.focusedScene = &scene;
     focus.focusedElementID = focus.focusedScene->primaryElementID;
   }
 
@@ -400,18 +480,12 @@ bool UiUtils::isPointInElement(Point point, UIElement* element){
   }
 
 Point UiUtils::centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h){
-      int new_x = floor((float)x_pos+((float)w/2));
-      int new_y = floor((float)y_pos+((float)h/2));
-      return Point(new_x, new_y);
+    int new_x = round(static_cast<float>(x_pos)+(w*0.5f));
+    int new_y = round(static_cast<float>(y_pos)+(h*0.5f));
+    return Point(new_x, new_y);
   }
 
 UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings settings, FocusingAlgorithm alg, Scene* scene, UIElement* focused){
-
-    Point center_point = (focused->centered) ? focused->getPos() 
-                                                   : UiUtils::centerPos(focused->getPos().x, focused->getPos().y, focused->getWidth(), focused->getHeight());
-    Scene temporaryScene = *scene;
-    temporaryScene.elements.erase(focused->getId());
-    Point new_point = center_point;
     if (alg == FocusingAlgorithm::Linear)
     {
       Ray ray{settings.max_distance, 1, direction};
@@ -481,41 +555,43 @@ UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, C
   int half_aperture = cone.aperture / 2;
   int starting_angle = cone.bisector - half_aperture;
   int end_angle = cone.bisector + half_aperture;
-  Scene tempScene = *currentScene;
-  tempScene.elements.erase(focused->getId());
+  focused->focusable = false;
 
   for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
   {
     for (int b = 0; b < cone.radius; b += cone.rad_step)
     {
       Point tempPoint = polarToCartesian(b, i);
-      Point centerPoint = focused->getPos();
+      Point centerPoint = focused->getCenterPoint();
       tempPoint.x += centerPoint.x;
       tempPoint.y += centerPoint.y;
-      for(auto elem : tempScene.elements){
-        if (isPointInElement(tempPoint, elem.second)){
+      for(auto elem : currentScene->elements){
+        if (elem.second->focusable && isPointInElement(tempPoint, elem.second)){
+          focused->focusable = true;
           return elem.second;
         }
       }
     }
   }
+  focused->focusable = true;
   return nullptr;
 }
 
 UIElement* UiUtils::findElementInRay(UIElement *focused, Scene *currentScene, Ray ray){
-  Scene tempScene = *currentScene;
-  tempScene.elements.erase(focused->getId());
+  focused->focusable = false;
 
   for(int i = 0; i<ray.ray_length; i+=ray.step){
     Point tempPoint = polarToCartesian(i, ray.direction);
-    Point centerPoint = focused->getPos();
+    Point centerPoint = focused->getCenterPoint();
     tempPoint.x += centerPoint.x;
     tempPoint.y += centerPoint.y;
-    for(auto elem : tempScene.elements){
-      if (isPointInElement(tempPoint, elem.second)){
+    for(auto elem : currentScene->elements){
+      if (elem.second->focusable && isPointInElement(tempPoint, elem.second)){
+        focused->focusable = true;
         return elem.second;
       }
     }
   }
+  focused->focusable = true;
   return nullptr;
 }

@@ -4,15 +4,14 @@
 
 void Button::updateState()
 {
+    state = digitalRead(pin);
     if (micros() - m_last_update >= 2500) //Short delay of 5ms to prevent weird things from happening
     {
-        state = digitalRead(pin);
         if (state && (state != prevState))
         {
             clickedOnce = true;
         }
-        else
-        {
+        else{
             clickedOnce = false;
         }
         m_last_update = micros();

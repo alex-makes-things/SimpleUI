@@ -13,6 +13,7 @@
 #define RST 17
 #define SCREENHEIGHT 64
 #define SCREENWIDTH 128
+#define BACKLIGHT 4
 
 using namespace ButtonUtils;
 
@@ -37,12 +38,18 @@ Image largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_lar
 Image smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
 
-AnimatedApp play(smallPlayTest, playTest, 64, 32, true, FocusStyle::Outline);
-AnimatedApp settings(smallSettings, largeSettings, 25, 32, true, FocusStyle::Outline);
-AnimatedApp gallery(smallGallery, largeGallery, 103, 32, true, FocusStyle::Outline);
+AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  true, FocusStyle::Animation);
+AnimatedApp settings(smallSettings, largeSettings,{25, 32},  true, FocusStyle::Animation);
+AnimatedApp gallery (smallGallery , largeGallery, {103, 32}, true, FocusStyle::Animation);
+
+Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5},16, 16, 0xFFFF);
+Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5},16, 16, 0xFFFF);
+Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5},16, 16, 0xFFFF);
 
 std::vector<UIElement*> elements = {&play, &settings, &gallery};
+std::vector<UIElement*> testing = {&check1, &check2, &check3};
 Scene home(elements, play);
+Scene test(testing, check1);
 UI ui(home, canvas);
 //--------------------------UI SETUP-----------------------------//
 
@@ -95,8 +102,15 @@ void handleComms( void *pvParameters){
   }
 }
 
+
+void loadTest(){
+  ui.focusScene(test);
+}
+
 void setup() {
   setupButtons(buttons);
+  pinMode(BACKLIGHT, OUTPUT);
+  analogWrite(BACKLIGHT, 20);
   Serial.begin(115200);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
@@ -105,17 +119,31 @@ void setup() {
   #if defined(ESP32)
   xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
   #endif
-  play.outline.border_distance = 2;
-  settings.outline.border_distance = 2;
-  gallery.outline.border_distance = 2;
+  play.focus_outline.border_distance = 2;
+  settings.focus_outline.border_distance = 2;
+  gallery.focus_outline.border_distance = 2;
 
-  play.outline.radius = 3;
-  settings.outline.radius = 3;
-  gallery.outline.radius = 3;
+  play.focus_outline.radius = 3;
+  settings.focus_outline.radius = 3;
+  gallery.focus_outline.radius = 3;
 
-  play.outline.thickness = 2;
-  settings.outline.thickness = 2;
-  gallery.outline.thickness = 2;
+  play.focus_outline.thickness = 2;
+  settings.focus_outline.thickness = 2;
+  gallery.focus_outline.thickness = 2;
+
+  check1.focus_outline.color = uint16_t(0x6b6b6b);
+  check2.focus_outline.color = uint16_t(0x6b6b6b);
+  check3.focus_outline.color = uint16_t(0x6b6b6b);
+
+  check1.focus_outline.border_distance = 1;
+  check2.focus_outline.border_distance = 1;
+  check3.focus_outline.border_distance = 1;
+
+  check1.focus_outline.radius = 7;
+  check2.focus_outline.radius = 7;
+  check3.focus_outline.radius = 7;
+  ui.addScene(test);
+  play.bind(std::move(loadTest));
 }
 
 //-------------BEFORE LOOP----------------//
@@ -166,10 +194,6 @@ void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
   tft.writePixels(bitmap, 8192, false);
 }
 
-//uint16_t buffer[8192];
-
-//Image current(128, 64, canvas.getBuffer());
-//Image prev(128, 64, buffer);
 
 void loop() {
     canvas.fillScreen(0x0000); //Fill the background with a black frame
@@ -177,12 +201,17 @@ void loop() {
     updateButtons(buttons);  //Update button states for every button
     
     if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.focusDirection(RIGHT, FocusingAlgorithm::Cone);
+      ui.focusDirection(RIGHT, FocusingAlgorithm::Linear);
     }
     if (button2.clickedOnce&& !button1.clickedOnce ) {
-      ui.focusDirection(LEFT, FocusingAlgorithm::Cone);
+      
+      ui.focusDirection(LEFT, FocusingAlgorithm::Linear);
     }
 
+    if(button3.clickedOnce){
+      ui.focus.focusedScene->getElementByUUID(ui.focus.focusedElementID)->click();
+    }
+    
     calcStart = micros();
     ui.render();
     calculationsTime = micros() - calcStart;
@@ -190,7 +219,6 @@ void loop() {
     computeTime(render_frametime);
     framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
 
-    //if(!dirtyRects(prev, current))
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
 
     
@@ -198,6 +226,5 @@ void loop() {
     rememberButtons(buttons);
     ui.update();
     frameTime = micros()-start;
-    Serial.println(frameTime);
     start = micros();
 }

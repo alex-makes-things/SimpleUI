@@ -12,7 +12,7 @@ class Button{
   Button(uint8_t gpio):pin(gpio){m_last_update=micros();}
   void setup();
   void updateState();
-  void remember(){prevState = state;}
+  void remember(){prevState = state; clickedOnce=false;}
   private:
 };
 

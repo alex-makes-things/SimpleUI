@@ -5,6 +5,7 @@
 #include <UUIDbuddy.h>
 #include <Adafruit_GFX.h>
 #include <set>
+#include <functional>
 
 #define RIGHT 0
 #define UP 90
@@ -24,17 +25,19 @@ struct Focus;
 struct FocusingSettings;
 struct Outline;
 
-enum class ElementType{UIElement, AnimatedApp, UIImage};
+enum class ElementType{UIElement, AnimatedApp, UIImage, Checkbox};
 enum class Quality{Low, Medium, High};
 enum class Direction{Up=90, Down=270, Left=180, Right=0};
 enum class FocusingAlgorithm{Linear, Cone};
 enum class FocusStyle{None, Animation, Outline, Color};
+
 
 struct Point{
   int x=0;   //X coordinate of the point 
   int y=0;   //Y coordinate of the point
   
   Point(int posx=0, int posy=0);
+
   bool operator<(const Point &other) const
   {
     return std::tie(x, y) < std::tie(other.x, other.y);
@@ -105,6 +108,13 @@ struct Outline{
   unsigned int border_distance;
   unsigned int radius;
   uint16_t color;
+  /*!
+    @brief Represent any type of outline, used in different ways by each function.
+    @param thickness  How many layers the outline has in pixels
+    @param distance   Distance in pixels from the outline to the outlined element
+    @param radius     Radius in pixels of the corners
+    @param color      RGB565 color of the outline
+*/
   Outline(unsigned int thickness=1, unsigned int distance=0, unsigned int radius = 0, uint16_t color=0xffff) : thickness(thickness), border_distance(distance), color(color), radius(radius){}
 };
 
@@ -183,13 +193,14 @@ private:
 //Generic UI element, all interactable elements inherit from this
 class UIElement{
   public:
+    bool focusable = true;
     Animator anim;
     const ElementType type;
     FocusStyle focus_style;
-    Outline outline;
+    Outline focus_outline;
     bool centered = false; //If true, the element will be drawn with its center being the coordinates passed to the constructor
     bool draw=true; //If true, the element is drawn, if false it's kept hidden.
-    UIElement(unsigned int w=0, unsigned int h=0, unsigned int posx=0, unsigned int posy=0, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None);
+    UIElement(unsigned int w=0, unsigned int h=0, Point pos = {0,0}, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None);
     void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
     inline void setPosX(unsigned int X) { m_position.x = X; }
     inline void setPosY(unsigned int Y) { m_position.y = Y; }
@@ -205,12 +216,16 @@ class UIElement{
     inline unsigned int getWidth() { return m_width; }
     inline unsigned int getHeight() { return m_height; }
     virtual void render();
+    // Interact with the element
+    virtual void click(){return;}
     inline bool isAnimating(){return !(anim.getDone() || anim.getStart());}
     inline bool isFocused();
     inline void setCenter(bool center) { centered = center; }
     Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h);
+    Point getDrawPoint();
+    Point getCenterPoint();
+    void drawFocusOutline();
   protected:
-    void drawOutline();
     Point m_position;
     bool m_overrideAnimationScaling = false;
     unsigned int m_width=0, m_height=0;
@@ -221,7 +236,7 @@ class UIElement{
 //Used to represent any Image with the tools provided by the library
 class UIImage : public UIElement{
 public:
-  UIImage(Image &img, unsigned int posx = 0, unsigned int posy = 0, FocusStyle focus_style = FocusStyle::None): UIElement(img.width, img.height, posx, posy, ElementType::UIImage, focus_style), m_body(&img){}
+  UIImage(Image &img, Point pos, FocusStyle focus_style = FocusStyle::None): UIElement(img.width, img.height, pos, ElementType::UIImage, focus_style), m_body(&img){}
   /// @param scale If negative, the scale is controlled by the animation.
   inline void setScale(float scale){m_scale_fac = scale;
                                     m_overrideAnimationScaling = (scale < 0) ? false : true;}
@@ -240,7 +255,7 @@ protected:
 // This is a heavily interactable element which animates from an Image to another when focused/unfocused, and clicking it can trigger an event
 class AnimatedApp : public UIElement{
   public:
-    AnimatedApp(Image& unfocused, Image& focused, int posx, int posy, bool isCentered, FocusStyle focus_style):UIElement(unfocused.width, unfocused.height, posx, posy, ElementType::AnimatedApp, focus_style){
+    AnimatedApp(Image& unfocused, Image& focused, Point pos, bool isCentered, FocusStyle focus_style):UIElement(unfocused.width, unfocused.height, pos, ElementType::AnimatedApp, focus_style){
       centered = isCentered;
       m_unselected = &unfocused;
       m_selected = &focused;
@@ -252,14 +267,36 @@ class AnimatedApp : public UIElement{
     void render() override;
     inline Image* getActive(){return m_showing;}
     inline void setColor(uint16_t hue){m_mono_color = hue;}
+    void click() override{
+      m_onClick();
+    }
+    void bind(std::function<void()> func){m_onClick = func;}
   protected:
-    void handleAppSelectionAnimation();
+    void m_drawAnimation();
+    std::function<void()> m_onClick = [](){return;};
     uint16_t m_mono_color = 0xffff;
     Image* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
     Image* m_selected = nullptr;  //This points to the image that is displayed when the element is focused
     Image* m_showing = nullptr;  //This points to the image that is currently being displayed
     float m_ratio;
   };
+
+
+// Extremely customizable yet bare-bones, reliable and easy to work with.
+class Checkbox : public UIElement{
+  public:
+  Outline outline;           //The checkbox's outline.
+  uint16_t selection_color;  //The color of the inside fill when the state is ON
+  Checkbox(Outline style, Point pos, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline);
+  void render();
+  void click() override{m_state = !m_state;}
+  /// @return The current state of the checkbox
+  inline bool getState(){return m_state;}
+
+  protected:
+  void m_drawCheckboxOutline();
+  bool m_state=false;
+};
 
 //This is one of the most fundamental blocks of the library, it groups together elements and allows for extreme versatility
 struct Scene{
@@ -268,7 +305,7 @@ struct Scene{
   std::unordered_map<std::string, UIElement*> elements;
   Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus);
   void renderScene();
-  inline UIElement* getElementByUUID(std::string UUID);
+  UIElement* getElementByUUID(std::string UUID);
 };
 
 
@@ -296,8 +333,8 @@ public:
   UI(Scene& first_scene, GFXcanvas16& framebuffer);
 #endif
 
-  void addScene(Scene* scene);
-  void focusScene(Scene* scene);
+  void addScene(Scene& scene);
+  void focusScene(Scene& scene);
   void render(){focus.focusedScene->renderScene();}
   void focusDirection(unsigned int direction, FocusingAlgorithm alg);
   void update();
