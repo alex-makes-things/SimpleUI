@@ -30,7 +30,7 @@ ESP-UI makes extensive use of STL functions, using unordered maps, vectors, and 
 - Animations
 - Reliable focusing system
 - Wide gamma of ui elements
-- Blazingly fast, most of the frame-time is tanked by the actual screen drawcall (140-200fps)
+- Blazingly fast, most scenes's framebuffers can be calculated in under 1ms (Tested with a resolution of 128x64).
 - Timers
 
 
