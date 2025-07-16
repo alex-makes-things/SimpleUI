@@ -110,7 +110,7 @@ void loadTest(){
 void setup() {
   setupButtons(buttons);
   pinMode(BACKLIGHT, OUTPUT);
-  analogWrite(BACKLIGHT, 20);
+  analogWrite(BACKLIGHT, 128);
   Serial.begin(115200);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
@@ -131,9 +131,9 @@ void setup() {
   settings.focus_outline.thickness = 2;
   gallery.focus_outline.thickness = 2;
 
-  check1.focus_outline.color = uint16_t(0x6b6b6b);
-  check2.focus_outline.color = uint16_t(0x6b6b6b);
-  check3.focus_outline.color = uint16_t(0x6b6b6b);
+  check1.focus_outline.color = hex("#6b6b6b");
+  check2.focus_outline.color = hex("#6b6b6b");
+  check3.focus_outline.color = hex("#6b6b6b");
 
   check1.focus_outline.border_distance = 1;
   check2.focus_outline.border_distance = 1;
@@ -155,7 +155,7 @@ uint64_t start = micros(), calcStart = micros();
 bool render_frametime = true;
 unsigned int frameTime=0;
 unsigned int calculationsTime=0;
-uint16_t debugColor = 0xfc60;
+uint16_t debugColor = hex("#ff8e00");
 
 //-------------SETTINGS----------------//
 

@@ -37,6 +37,30 @@ void transferFrame(uint16_t* emitter, uint16_t* receiver, size_t len){
     }
 }
 
+
+uint16_t rgb565(unsigned int r, unsigned int g, unsigned int b){
+    return static_cast<uint16_t>((r << 11) | (g << 5) | b);
+}
+uint16_t hex(std::string hex) {
+    if(hex.length() == 7){
+        // Assumes valid 7-character input like "#RRGGBB"
+        uint8_t r = ((hex[1] <= '9' ? hex[1] - '0' : (hex[1] & ~0x20) - 'A' + 10) << 4)
+                | (hex[2] <= '9' ? hex[2] - '0' : (hex[2] & ~0x20) - 'A' + 10);
+        uint8_t g = ((hex[3] <= '9' ? hex[3] - '0' : (hex[3] & ~0x20) - 'A' + 10) << 4)
+                | (hex[4] <= '9' ? hex[4] - '0' : (hex[4] & ~0x20) - 'A' + 10);
+        uint8_t b = ((hex[5] <= '9' ? hex[5] - '0' : (hex[5] & ~0x20) - 'A' + 10) << 4)
+                | (hex[6] <= '9' ? hex[6] - '0' : (hex[6] & ~0x20) - 'A' + 10);
+
+        // Convert to RGB565
+        return ((r & 0xF8) << 8) |  // 5 bits red
+            ((g & 0xFC) << 3) |  // 6 bits green
+            (b >> 3);            // 5 bits blue
+    }
+    else{
+        return 0;
+    }
+}
+
 int ArrUtils::getArrSize8(int width, int height, float scale_fac) {
         int w = static_cast<int>(width * scale_fac);
         int h = static_cast<int>(height * scale_fac);

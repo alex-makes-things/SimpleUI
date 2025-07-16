@@ -42,28 +42,34 @@ struct Point{
   {
     return std::tie(x, y) < std::tie(other.x, other.y);
   }
-
   Point& operator+=(int value) {
     x += value;
     y += value;
     return *this;
   }
-  
+  Point& operator+=(const Point& other) {
+    x += other.x;
+    y += other.y;
+    return *this;
+  }
   Point& operator++(int) {
     x++;
     y++;
     return *this;
   }
-
   Point& operator--(int) {
     x--;
     y--;
     return *this;
   }
-
   Point& operator-=(int value) {
     x -= value;
     y -= value;
+    return *this;
+  }
+  Point& operator-=(const Point& other) {
+    x -= other.x;
+    y -= other.y;
     return *this;
   }
 };

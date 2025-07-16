@@ -342,7 +342,7 @@ void AnimatedApp::render(){
     @param isCentered   Is the element centered around the provided coordinates?
     @param focus_style  What method is used to signal a focus
 */
-Checkbox::Checkbox(Outline style, Point pos, unsigned int width, unsigned int height, uint16_t fillColor,bool isCentered=false, FocusStyle focus_style)
+Checkbox::Checkbox(Outline style, Point pos, unsigned int width, unsigned int height, uint16_t fillColor,bool isCentered, FocusStyle focus_style)
     :UIElement(width, height, pos, ElementType::Checkbox, focus_style), outline(style), selection_color(fillColor){
       centered = isCentered;
       focus_outline.border_distance=0U;
@@ -552,19 +552,18 @@ std::set<Point> UiUtils::computeConePoints(Point vertex, Cone cone){
 }
 
 UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, Cone cone){
-  int half_aperture = cone.aperture / 2;
+  int half_aperture = static_cast<int>(cone.aperture * 0.5);
   int starting_angle = cone.bisector - half_aperture;
   int end_angle = cone.bisector + half_aperture;
   focused->focusable = false;
+  const Point centerPoint = focused->getCenterPoint();
 
   for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
   {
     for (int b = 0; b < cone.radius; b += cone.rad_step)
     {
       Point tempPoint = polarToCartesian(b, i);
-      Point centerPoint = focused->getCenterPoint();
-      tempPoint.x += centerPoint.x;
-      tempPoint.y += centerPoint.y;
+      tempPoint += centerPoint;
       for(auto elem : currentScene->elements){
         if (elem.second->focusable && isPointInElement(tempPoint, elem.second)){
           focused->focusable = true;
@@ -579,12 +578,11 @@ UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, C
 
 UIElement* UiUtils::findElementInRay(UIElement *focused, Scene *currentScene, Ray ray){
   focused->focusable = false;
+  const Point centerPoint = focused->getCenterPoint();
 
   for(int i = 0; i<ray.ray_length; i+=ray.step){
     Point tempPoint = polarToCartesian(i, ray.direction);
-    Point centerPoint = focused->getCenterPoint();
-    tempPoint.x += centerPoint.x;
-    tempPoint.y += centerPoint.y;
+    tempPoint += centerPoint;
     for(auto elem : currentScene->elements){
       if (elem.second->focusable && isPointInElement(tempPoint, elem.second)){
         focused->focusable = true;

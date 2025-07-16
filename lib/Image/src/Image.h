@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <Arduino.h>
+#include <string.h>
 
 namespace ArrUtils{
     int getArrSize8(int width, int height, float scale_fac);
@@ -50,3 +51,5 @@ bool dirtyRects(Image first, Image second);
 float Fmap(float x, float in_min, float in_max, float out_min, float out_max);
 float Flerp(float v0, float v1, float t);
 Image scale(Image &input, float scaling_factor);
+uint16_t rgb565(unsigned int r, unsigned int g, unsigned int b);
+uint16_t hex(std::string hex);
