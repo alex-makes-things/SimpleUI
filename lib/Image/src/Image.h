@@ -48,8 +48,8 @@ struct Image{
 
 void transferFrame(uint16_t* emitter, uint16_t* receiver, size_t len);
 bool dirtyRects(Image first, Image second);
-float Fmap(float x, float in_min, float in_max, float out_min, float out_max);
-float Flerp(float v0, float v1, float t);
-Image scale(Image &input, float scaling_factor);
-uint16_t rgb565(unsigned int r, unsigned int g, unsigned int b);
-uint16_t hex(std::string hex);
+const float Fmap(const float x, const float in_min, const float in_max, const float out_min, const float out_max);
+const float Flerp(const float v0, const float v1, const float t);
+const Image scale(Image &input, const float scaling_factor);
+const uint16_t rgb565(unsigned int r, unsigned int g, unsigned int b);
+const uint16_t hex(std::string hex);

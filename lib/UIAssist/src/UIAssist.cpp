@@ -71,21 +71,21 @@ void Animator::update(){
     if(reverse){
       //Magnetic attachment to initial value and setting isAtStart
         
-        if (fabs(progress-final)<=0.0005f){
+        if (fabs(progress-final)<=EPSILON){
           progress = final;
+          isAtStart =true;
         }
-        isAtStart = (progress==final) ? true : false;
       }else{
-        if (fabs(progress-initial)<=0.0005f){
+        if (fabs(progress-initial)<=EPSILON){
           progress = initial;
+          isAtStart =true;
         }
-        isAtStart = (progress==initial) ? true : false;
       }
 
     //If the animation is active, the update logic runs
     if (enable){
       now = micros();
-      elapsed = std::clamp(now-currentTime, static_cast<unsigned long long>(0), static_cast<unsigned long long>(duration));
+      elapsed = std::clamp(now-currentTime, 0ULL, static_cast<uint64_t>(duration));
 
       //Here I add anything that has to run when the animation is in its done state
       if(isDone){
@@ -95,8 +95,10 @@ void Animator::update(){
             invert();
             bounce_done = false;
           } else if (!bounce_done){
-            invert();
-            isDone=false;
+            //invert();
+            //isDone=false;
+            resetAnim();
+            reverse = !reverse;
             bounce_done = true;
           }
         }
@@ -110,11 +112,11 @@ void Animator::update(){
       else{
         if (elapsed<duration){
           progress = std::clamp(Fmap((reverse) ? duration-elapsed : elapsed, 0, duration, initial, final), initial, final);
-
-          } else {
-            isDone = true;
-            progress = (reverse) ? initial : final;
-          }
+        } else {
+          isDone = true;
+          progress = (reverse) ? initial : final;
+        }
+        isAtStart = false;
       }
     }
   }
@@ -168,7 +170,7 @@ void Animator::invert(){
 UIElement::UIElement(unsigned int w, unsigned int h, Point pos, ElementType element, FocusStyle style) 
 : type(element), m_width(w), m_height(h), m_position(pos), focus_style(style){}
 
-Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
+Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h) const {
       unsigned int new_x = static_cast<unsigned int>(static_cast<float>(x_pos)-(static_cast<float>(w)*0.5f));
       unsigned int new_y = static_cast<unsigned int>(static_cast<float>(y_pos)-(static_cast<float>(h)*0.5f));
       return Point(new_x, new_y);
@@ -222,11 +224,11 @@ void UIElement::render(){
   drawFocusOutline();
 }
 
-Point UIElement::getDrawPoint(){
+Point UIElement::getDrawPoint() const {
   return centered ? centerToCornerPos(m_position.x, m_position.y, m_width, m_height) : m_position;
 }
 
-Point UIElement::getCenterPoint(){
+Point UIElement::getCenterPoint() const {
   return centered ? m_position : UiUtils::centerPos(m_position.x, m_position.y, m_width, m_height);
 }
 
@@ -236,23 +238,22 @@ void UIImage::render(){
   drawFocusOutline();
   anim.update();
   
-  if (draw){
-    m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
-    Image drawing_image = m_scale_fac != 1 ? scale(*m_body, m_scale_fac) : *m_body;
-    Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
 
-    if(drawing_image.data.colorspace == PixelType::Mono){
-      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
-    }
-    else{
-      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
-    }
+  const float m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
+  Image drawing_image = m_scale_fac != 1 ? scale(*m_body, m_scale_fac) : *m_body;
+  Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+  if(drawing_image.data.colorspace == PixelType::Mono){
+    m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
   }
+  else{
+    m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
+  }
+
 }
 
 //--------------------AnimatedApp CLASS---------------------------------------------------------------//
 
-void AnimatedApp::m_drawAnimation(){
+void AnimatedApp::m_computeAnimation(){
   if (m_parent_ui->focus.hasChanged() || (m_parent_ui->focus.isFirstBoot && isFocused()))
   {
     if(isFocused()){  
@@ -312,20 +313,18 @@ void AnimatedApp::m_drawAnimation(){
 void AnimatedApp::render(){
   anim.update();
   if (focus_style == FocusStyle::Animation)
-    m_drawAnimation();
+    m_computeAnimation();
  
-  float scale_fac = anim.getProgress();
-  if (draw){
-    Image drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
-    Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
-
-    if(drawing_image.data.colorspace == PixelType::Mono){
-      m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
-    }
-    else{
-      m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
-    }
+  const float scale_fac = anim.getProgress();
+  Image drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
+  Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+  if(drawing_image.data.colorspace == PixelType::Mono){
+    m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
   }
+  else{
+    m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
+  }
+
 }
 
 //--------------------Checkbox CLASS---------------------------------------------------------------//
@@ -388,9 +387,8 @@ void Checkbox::render(){
   m_drawCheckboxOutline();
   if(m_state){
     Point fill_pos = getDrawPoint();
-    unsigned int offset = outline.border_distance+outline.thickness;
-    fill_pos+=offset;
-    offset=outline.border_distance*4;
+    fill_pos += (outline.border_distance+outline.thickness);
+    const unsigned int offset=outline.border_distance*4;
     if(outline.radius!=0){
       m_parent_ui->buffer->fillRoundRect(fill_pos.x, fill_pos.y, m_width-offset, m_height-offset, outline.radius-outline.border_distance, selection_color);
     }
@@ -412,11 +410,13 @@ Scene::Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus){
 
 void Scene::renderScene()
   {
-    for (auto elem : elements)
+    for (const auto&[id, element] : elements)
     {
-      elem.second->render();
-      if(elem.second->isFocused()&&elem.second->focus_style==FocusStyle::Outline)
-        elem.second->drawFocusOutline();
+      if(element->draw){
+        element->render();
+        if(element->isFocused()&&element->focus_style==FocusStyle::Outline)
+          element->drawFocusOutline();
+      }
     }
   }
 
@@ -436,8 +436,8 @@ UI::UI(Scene& first_scene, GFXcanvas16& framebuffer)
 
 void UI::addScene(Scene& scene){
     scenes.push_back(&scene);                 //KEEP IN MIND "REALLOCATES"
-    for(auto elem : scene.elements){
-      elem.second->setUiListener(this);
+    for(const auto&[id, element] : scene.elements){
+      element->setUiListener(this);
     }
   }
 
@@ -469,23 +469,29 @@ void UI::update(){
 
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
-const float UiUtils::degToRadCoefficient= 0.01745329251;
 
 bool UiUtils::isPointInElement(Point point, UIElement* element){
-    Point element_pos = element->getPos();
+    const Point element_pos = element->getPos();
     if ((point.x >= element_pos.x && point.x <= element_pos.x + element->getWidth()) && (point.y >= element_pos.y && point.y <= element_pos.y + element->getHeight())){
       return true;
     }
     return false;
   }
 
-Point UiUtils::centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h){
+/*!
+    @param x_pos  X coordinate of the top-left corner
+    @param y_pos  Y coordinate of the top-left corner
+    @param w      Width in pixels
+    @param h      Height in pixels
+    @return The center point of the described boundary
+  */
+const Point UiUtils::centerPos(int x_pos, int y_pos, const unsigned int w, const unsigned int h){
     int new_x = round(static_cast<float>(x_pos)+(w*0.5f));
     int new_y = round(static_cast<float>(y_pos)+(h*0.5f));
     return Point(new_x, new_y);
   }
 
-UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings settings, FocusingAlgorithm alg, Scene* scene, UIElement* focused){
+UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings& settings, FocusingAlgorithm& alg, Scene*& scene, UIElement* focused){
     if (alg == FocusingAlgorithm::Linear)
     {
       Ray ray{settings.max_distance, 1, direction};
@@ -527,10 +533,9 @@ UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings sett
     return nullptr;
 }
 
-Point UiUtils::polarToCartesian(float radius, float angle){
-  int x = radius * cos(-angle * degToRadCoefficient);
-  int y = radius * sin(-angle * degToRadCoefficient);
-  return Point(x, y);
+Point UiUtils::polarToCartesian(const float radius, const float angle){
+  return Point(radius * cos(-angle * degToRadCoefficient), //x
+               radius * sin(-angle * degToRadCoefficient));//y
 }
 
 std::set<Point> UiUtils::computeConePoints(Point vertex, Cone cone){
@@ -551,23 +556,25 @@ std::set<Point> UiUtils::computeConePoints(Point vertex, Cone cone){
   return buffer;
 }
 
-UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, Cone cone){
-  int half_aperture = static_cast<int>(cone.aperture * 0.5);
-  int starting_angle = cone.bisector - half_aperture;
-  int end_angle = cone.bisector + half_aperture;
+UIElement* UiUtils::findElementInCone(UIElement*& focused, Scene*& currentScene, const Cone& cone){
   focused->focusable = false;
+
+  const int half_aperture = static_cast<int>(cone.aperture * 0.5);
+  const int starting_angle = cone.bisector - half_aperture;
+  const int end_angle = cone.bisector + half_aperture;
   const Point centerPoint = focused->getCenterPoint();
 
+
+  Point tempPoint;
   for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
   {
     for (int b = 0; b < cone.radius; b += cone.rad_step)
     {
-      Point tempPoint = polarToCartesian(b, i);
-      tempPoint += centerPoint;
-      for(auto elem : currentScene->elements){
-        if (elem.second->focusable && isPointInElement(tempPoint, elem.second)){
+      tempPoint = polarToCartesian(b, i) + centerPoint;
+      for(const auto&[id, element] : currentScene->elements){
+        if (element->focusable && isPointInElement(tempPoint, element)){
           focused->focusable = true;
-          return elem.second;
+          return element;
         }
       }
     }
@@ -576,17 +583,17 @@ UIElement* UiUtils::findElementInCone(UIElement *focused, Scene *currentScene, C
   return nullptr;
 }
 
-UIElement* UiUtils::findElementInRay(UIElement *focused, Scene *currentScene, Ray ray){
+UIElement* UiUtils::findElementInRay(UIElement*& focused, Scene*& currentScene, const Ray& ray){
   focused->focusable = false;
   const Point centerPoint = focused->getCenterPoint();
-
+  Point tempPoint;
+  
   for(int i = 0; i<ray.ray_length; i+=ray.step){
-    Point tempPoint = polarToCartesian(i, ray.direction);
-    tempPoint += centerPoint;
-    for(auto elem : currentScene->elements){
-      if (elem.second->focusable && isPointInElement(tempPoint, elem.second)){
+    tempPoint = polarToCartesian(i, ray.direction) + centerPoint;
+    for(const auto&[id, element] : currentScene->elements){
+      if (element->focusable && isPointInElement(tempPoint, element)){
         focused->focusable = true;
-        return elem.second;
+        return element;
       }
     }
   }

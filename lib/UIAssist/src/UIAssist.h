@@ -72,6 +72,17 @@ struct Point{
     y -= other.y;
     return *this;
   }
+  Point& operator+(const Point& other) {
+    x += other.x;
+    y += other.y;
+    return *this;
+  }
+  Point& operator-(const Point& other) {
+    x -= other.x;
+    y -= other.y;
+    return *this;
+  }
+
 };
 
 // Holds the parameters necessary for computing a 2D cone with whatever level of detail desired
@@ -163,15 +174,15 @@ class Animator{
   //Switches the enable key, if true it becomes false and viceversa
   void switchState();
   //!@return A float representing the current progress in the animation
-  inline float getProgress() { return progress; }
+  inline float getProgress() const { return progress; }
   //!@return True if the animation is at the ending point
-  inline bool getDone() { return isDone; }
+  inline bool getDone() const { return isDone; }
   //!@return True if the animation is at the starting point
-  inline bool getStart() { return isAtStart; }
+  inline bool getStart() const { return isAtStart; }
   //!@return True if the animation is not stopped
-  inline bool getIsEnabled() { return enable; }
+  inline bool getIsEnabled() const { return enable; }
   //!@return True if the animation is going backwards
-  inline bool getDirection() { return reverse; }
+  inline bool getDirection() const { return reverse; }
   //Resets the animation's settings to the defaults (all false)
   inline void defaultModifiers();
   //Makes the animation restart, works even with reverse
@@ -180,6 +191,7 @@ class Animator{
   inline void invert();
 
 private:
+  static constexpr float EPSILON = 0.0005f;
   bool isAtStart = true;  // If true, the animation is in its starting point
   bool isDone = false;    // Signals if the animation is complete or not
   bool looping = false;   // Makes the animation loop if true
@@ -206,7 +218,9 @@ class UIElement{
     Outline focus_outline;
     bool centered = false; //If true, the element will be drawn with its center being the coordinates passed to the constructor
     bool draw=true; //If true, the element is drawn, if false it's kept hidden.
+  public:
     UIElement(unsigned int w=0, unsigned int h=0, Point pos = {0,0}, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None);
+    virtual ~UIElement(){};
     void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
     inline void setPosX(unsigned int X) { m_position.x = X; }
     inline void setPosY(unsigned int Y) { m_position.y = Y; }
@@ -217,19 +231,19 @@ class UIElement{
     */
     inline void setUiListener(UI *listener) { m_parent_ui = listener; }
     //!@return The element's UUID
-    inline std::string getId() { return m_UUID; }
-    inline Point getPos() { return m_position; }
-    inline unsigned int getWidth() { return m_width; }
-    inline unsigned int getHeight() { return m_height; }
+    inline std::string getId() const { return m_UUID; }
+    inline Point getPos() const { return m_position; }
+    inline unsigned int getWidth() const { return m_width; }
+    inline unsigned int getHeight() const { return m_height; }
     virtual void render();
     // Interact with the element
     virtual void click(){return;}
-    inline bool isAnimating(){return !(anim.getDone() || anim.getStart());}
+    inline bool isAnimating() const {return !(anim.getDone() || anim.getStart());}
     inline bool isFocused();
     inline void setCenter(bool center) { centered = center; }
-    Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h);
-    Point getDrawPoint();
-    Point getCenterPoint();
+    Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h) const ;
+    Point getDrawPoint() const;
+    Point getCenterPoint() const;
     void drawFocusOutline();
   protected:
     Point m_position;
@@ -246,10 +260,10 @@ public:
   /// @param scale If negative, the scale is controlled by the animation.
   inline void setScale(float scale){m_scale_fac = scale;
                                     m_overrideAnimationScaling = (scale < 0) ? false : true;}
-  inline float getScale() { return m_scale_fac; }
+  inline float getScale() const { return m_scale_fac; }
   inline void setColor(uint16_t hue) { m_mono_color = hue; }
   inline void setImg(Image *img){m_body = img; m_width = img->width; m_height = img->height;}
-  inline Image *getImg() { return m_body; }
+  inline Image *getImg() const { return m_body; }
   void render() override;
 
 protected:
@@ -278,7 +292,7 @@ class AnimatedApp : public UIElement{
     }
     void bind(std::function<void()> func){m_onClick = func;}
   protected:
-    void m_drawAnimation();
+    void m_computeAnimation();
     std::function<void()> m_onClick = [](){return;};
     uint16_t m_mono_color = 0xffff;
     Image* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
@@ -293,14 +307,16 @@ class Checkbox : public UIElement{
   public:
   Outline outline;           //The checkbox's outline.
   uint16_t selection_color;  //The color of the inside fill when the state is ON
+  public:
   Checkbox(Outline style, Point pos, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline);
   void render();
   void click() override{m_state = !m_state;}
   /// @return The current state of the checkbox
-  inline bool getState(){return m_state;}
+  inline bool getState() const {return m_state;}
 
   protected:
   void m_drawCheckboxOutline();
+  protected:
   bool m_state=false;
 };
 
@@ -317,14 +333,16 @@ struct Scene{
 
 
 namespace UiUtils{
-  extern const float degToRadCoefficient;
+  constexpr float degToRadCoefficient = 0.01745329251;
+  const Point centerPos(int x_pos, int y_pos, const unsigned int w, const unsigned int h);
+  
+  Point polarToCartesian(const float radius, const float angle);
   bool isPointInElement(Point point, UIElement* element);
-  Point centerPos(int x_pos, int y_pos, unsigned int w, unsigned int h);
-  UIElement* SignedDistance(unsigned int direction, FocusingSettings settings, FocusingAlgorithm alg, Scene *scene, UIElement *focused);
-  Point polarToCartesian(float radius, float angle);
+  UIElement* SignedDistance(unsigned int direction, FocusingSettings& settings, FocusingAlgorithm& alg, Scene*& scene, UIElement* focused);
+  UIElement* findElementInCone(UIElement*& focused, Scene*& currentScene, const Cone& cone);
+  UIElement* findElementInRay(UIElement*& focused, Scene*& currentScene, const Ray& ray);
+
   std::set<Point> computeConePoints(Point vertex, Cone cone);
-  UIElement* findElementInCone(UIElement* focused, Scene* currentScene, Cone cone);
-  UIElement* findElementInRay(UIElement *focused, Scene *currentScene, Ray ray);
 }
 
 /*This is the object that has the power over the final frame, this reads inputs, handles focusing, and is responsible for calling the rendering
@@ -339,6 +357,7 @@ public:
   UI(Scene& first_scene, GFXcanvas16& framebuffer);
 #endif
 
+public:
   void addScene(Scene& scene);
   void focusScene(Scene& scene);
   void render(){focus.focusedScene->renderScene();}

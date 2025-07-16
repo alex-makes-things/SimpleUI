@@ -201,11 +201,11 @@ void loop() {
     updateButtons(buttons);  //Update button states for every button
     
     if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.focusDirection(RIGHT, FocusingAlgorithm::Linear);
+      ui.focusDirection(RIGHT, FocusingAlgorithm::Cone);
     }
     if (button2.clickedOnce&& !button1.clickedOnce ) {
       
-      ui.focusDirection(LEFT, FocusingAlgorithm::Linear);
+      ui.focusDirection(LEFT, FocusingAlgorithm::Cone);
     }
 
     if(button3.clickedOnce){

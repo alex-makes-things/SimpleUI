@@ -1,10 +1,10 @@
 #include <Image.h>
 
-float Fmap(float x, float in_min, float in_max, float out_min, float out_max)
+const float Fmap(const float x, const float in_min, const float in_max, const float out_min, const float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-float Flerp(float v0, float v1, float t) {
+const float Flerp(const float v0, const float v1, const float t) {
   return (1 - t) * v0 + t * v1;
 }
 bool dirtyRects(Image first, Image second){
@@ -38,10 +38,10 @@ void transferFrame(uint16_t* emitter, uint16_t* receiver, size_t len){
 }
 
 
-uint16_t rgb565(unsigned int r, unsigned int g, unsigned int b){
+const uint16_t rgb565(unsigned int r, unsigned int g, unsigned int b){
     return static_cast<uint16_t>((r << 11) | (g << 5) | b);
 }
-uint16_t hex(std::string hex) {
+const uint16_t hex(std::string hex) {
     if(hex.length() == 7){
         // Assumes valid 7-character input like "#RRGGBB"
         uint8_t r = ((hex[1] <= '9' ? hex[1] - '0' : (hex[1] & ~0x20) - 'A' + 10) << 4)
@@ -71,7 +71,7 @@ int ArrUtils::getArrSize16 (int width, int height, float scale_fac){
     return (static_cast<int>(width * scale_fac) * static_cast<int>(height * scale_fac));
     }
 
-Image scale(Image& input, float scaling_factor){
+const Image scale(Image& input, const float scaling_factor){
     const unsigned int scaled_width = static_cast<const unsigned int>(input.width * scaling_factor);
     const unsigned int scaled_height = static_cast<const unsigned int>(input.height * scaling_factor);
 
