@@ -7,10 +7,18 @@
 #include <set>
 #include <functional>
 
+#define PERFORMANCE_PROFILING 0
+
 #define RIGHT 0
 #define UP 90
 #define LEFT 180
 #define DOWN 270
+
+#if PERFORMANCE_PROFILING
+    #define INSTRUMENTATE(ui) Instrumentator timer(ui, __PRETTY_FUNCTION__);
+#else
+    #define INSTRUMENTATE(ui)  
+#endif
 
 class UI;
 class UIElement;
@@ -25,7 +33,12 @@ struct Focus;
 struct FocusingSettings;
 struct Outline;
 
-enum class ElementType{UIElement, AnimatedApp, UIImage, Checkbox};
+enum class ElementType{
+  UIElement,
+  AnimatedApp,
+  UIImage,
+  Checkbox
+};
 enum class Quality{Low, Medium, High};
 enum class Direction{Up=90, Down=270, Left=180, Right=0};
 enum class FocusingAlgorithm{Linear, Cone};
@@ -72,17 +85,6 @@ struct Point{
     y -= other.y;
     return *this;
   }
-  Point& operator+(const Point& other) {
-    x += other.x;
-    y += other.y;
-    return *this;
-  }
-  Point& operator-(const Point& other) {
-    x -= other.x;
-    y -= other.y;
-    return *this;
-  }
-
 };
 
 // Holds the parameters necessary for computing a 2D cone with whatever level of detail desired
@@ -203,9 +205,9 @@ private:
   float initial;
   float final;
   float progress;                  // The progress is ultimately the output of the structure, which lies clamped in between initial and final
-  uint64_t currentTime = micros(); // This is needed for the temporal aspect of the interpolation
-  uint64_t now = micros();         // This is used for synchronicity so that every cycle uses the same time reference
-  uint64_t elapsed = 0;            // The amount of time that has passed while the animation was running
+  uint32_t currentTime = micros(); // This is needed for the temporal aspect of the interpolation
+  uint32_t now = micros();         // This is used for synchronicity so that every cycle uses the same time reference
+  uint32_t elapsed = 0;            // The amount of time that has passed while the animation was running
 };
 
 //Generic UI element, all interactable elements inherit from this
@@ -235,16 +237,17 @@ class UIElement{
     inline Point getPos() const { return m_position; }
     inline unsigned int getWidth() const { return m_width; }
     inline unsigned int getHeight() const { return m_height; }
+    inline UI* getParentUI() const { return m_parent_ui; }
     virtual void render();
     // Interact with the element
     virtual void click(){return;}
     inline bool isAnimating() const {return !(anim.getDone() || anim.getStart());}
-    inline bool isFocused();
+    inline bool isFocused() const;
     inline void setCenter(bool center) { centered = center; }
     Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h) const ;
     Point getDrawPoint() const;
     Point getCenterPoint() const;
-    void drawFocusOutline();
+    void drawFocusOutline() const;
   protected:
     Point m_position;
     bool m_overrideAnimationScaling = false;
@@ -256,51 +259,50 @@ class UIElement{
 //Used to represent any Image with the tools provided by the library
 class UIImage : public UIElement{
 public:
-  UIImage(Image &img, Point pos, FocusStyle focus_style = FocusStyle::None): UIElement(img.width, img.height, pos, ElementType::UIImage, focus_style), m_body(&img){}
+  UIImage(Texture &img, Point pos, FocusStyle focus_style = FocusStyle::None): UIElement(img.width, img.height, pos, ElementType::UIImage, focus_style), m_body(&img){}
   /// @param scale If negative, the scale is controlled by the animation.
   inline void setScale(float scale){m_scale_fac = scale;
                                     m_overrideAnimationScaling = (scale < 0) ? false : true;}
   inline float getScale() const { return m_scale_fac; }
   inline void setColor(uint16_t hue) { m_mono_color = hue; }
-  inline void setImg(Image *img){m_body = img; m_width = img->width; m_height = img->height;}
-  inline Image *getImg() const { return m_body; }
+  inline void setImg(Texture *img){m_body = img; m_width = img->width; m_height = img->height;}
+  inline Texture *getImg() const { return m_body; }
   void render() override;
 
 protected:
-  Image *m_body;
+  Texture *m_body;
   float m_scale_fac = 1;
   uint16_t m_mono_color = 0xffff;
 };
 
-// This is a heavily interactable element which animates from an Image to another when focused/unfocused, and clicking it can trigger an event
+// This is a heavily interactable element which animates from a Texture to another when focused/unfocused, and clicking it can trigger an event
 class AnimatedApp : public UIElement{
   public:
-    AnimatedApp(Image& unfocused, Image& focused, Point pos, bool isCentered, FocusStyle focus_style):UIElement(unfocused.width, unfocused.height, pos, ElementType::AnimatedApp, focus_style){
+    AnimatedApp(Texture& unfocused, Texture& focused, Point pos, bool isCentered, FocusStyle focus_style):UIElement(unfocused.width, unfocused.height, pos, ElementType::AnimatedApp, focus_style){
       centered = isCentered;
       m_unselected = &unfocused;
       m_selected = &focused;
       m_showing = m_unselected;
       m_ratio = static_cast<float>(focused.width) / static_cast<float>(unfocused.width);
-      anim = Animator(1, m_ratio, 80);
+      anim = Animator(1, m_ratio, 75);
     }
     
     void render() override;
-    inline Image* getActive(){return m_showing;}
+    inline Texture* getActive(){return m_showing;}
     inline void setColor(uint16_t hue){m_mono_color = hue;}
     void click() override{
       m_onClick();
     }
-    void bind(std::function<void()> func){m_onClick = func;}
+    void bind(const std::function<void()>& func){m_onClick = func;}
   protected:
     void m_computeAnimation();
     std::function<void()> m_onClick = [](){return;};
     uint16_t m_mono_color = 0xffff;
-    Image* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
-    Image* m_selected = nullptr;  //This points to the image that is displayed when the element is focused
-    Image* m_showing = nullptr;  //This points to the image that is currently being displayed
+    Texture* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
+    Texture* m_selected = nullptr;  //This points to the image that is displayed when the element is focused
+    Texture* m_showing = nullptr;  //This points to the image that is currently being displayed
     float m_ratio;
   };
-
 
 // Extremely customizable yet bare-bones, reliable and easy to work with.
 class Checkbox : public UIElement{
@@ -315,7 +317,7 @@ class Checkbox : public UIElement{
   inline bool getState() const {return m_state;}
 
   protected:
-  void m_drawCheckboxOutline();
+  void m_drawCheckboxOutline() const;
   protected:
   bool m_state=false;
 };
@@ -326,11 +328,9 @@ struct Scene{
   std::string primaryElementID;
   std::unordered_map<std::string, UIElement*> elements;
   Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus);
-  void renderScene();
-  UIElement* getElementByUUID(std::string UUID);
+  void renderScene() const;
+  UIElement* getElementByUUID(std::string UUID) const;
 };
-
-
 
 namespace UiUtils{
   constexpr float degToRadCoefficient = 0.01745329251;
@@ -338,9 +338,9 @@ namespace UiUtils{
   
   Point polarToCartesian(const float radius, const float angle);
   bool isPointInElement(Point point, UIElement* element);
-  UIElement* SignedDistance(unsigned int direction, FocusingSettings& settings, FocusingAlgorithm& alg, Scene*& scene, UIElement* focused);
-  UIElement* findElementInCone(UIElement*& focused, Scene*& currentScene, const Cone& cone);
-  UIElement* findElementInRay(UIElement*& focused, Scene*& currentScene, const Ray& ray);
+  UIElement* SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused);
+  UIElement* findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone);
+  UIElement* findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray);
 
   std::set<Point> computeConePoints(Point vertex, Cone cone);
 }
@@ -348,27 +348,43 @@ namespace UiUtils{
 /*This is the object that has the power over the final frame, this reads inputs, handles focusing, and is responsible for calling the rendering
 functions which modify the final buffer.*/
 class UI{
-public:
+  public:
   Focus focus;
   std::vector<Scene*> scenes;
   FocusingSettings focusingSettings{64, Quality::Medium};
-
-#ifdef _ADAFRUIT_GFX_H
+  GFXcanvas16 *buffer;
+  
+  
+  public:
   UI(Scene& first_scene, GFXcanvas16& framebuffer);
-#endif
-
-public:
   void addScene(Scene& scene);
   void focusScene(Scene& scene);
   void render(){focus.focusedScene->renderScene();}
   void focusDirection(unsigned int direction, FocusingAlgorithm alg);
   void update();
-  inline bool isFocusingFree(){return !m_focusing_busy;}
+  inline bool isFocusingFree() const { return !m_focusing_busy; }
+  
+  #if PERFORMANCE_PROFILING
+    void printPerfStats();
+    std::unordered_map<std::string, uint32_t> m_perfValues;
+    void m_addPerf(std::string key, uint32_t time);
+  #endif
 
-#ifdef _ADAFRUIT_GFX_H
-  GFXcanvas16 *buffer;
-#endif
 
-private:
-  bool m_focusing_busy = false; //You could see this as sort of a "mutex" to prevent multiple focuses from happening in the same cycle, which could cause undefined behavior
+  private:
+  bool m_focusing_busy = false; //You could see this as sort of a "mutex" to prevent multiple focuses from happening in the same cycle, which could break a UI
 };
+
+#if PERFORMANCE_PROFILING
+class Instrumentator{
+  UI* target = nullptr;
+  const std::string funcName;
+  const uint32_t start;
+  public:
+  Instrumentator(UI* target, std::string func) : target(target), funcName(func), start(micros()){}
+  ~Instrumentator(){
+    target->m_addPerf(funcName, micros()-start);
+  }
+
+};
+#endif

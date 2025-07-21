@@ -85,7 +85,7 @@ void Animator::update(){
     //If the animation is active, the update logic runs
     if (enable){
       now = micros();
-      elapsed = std::clamp(now-currentTime, 0ULL, static_cast<uint64_t>(duration));
+      elapsed = std::clamp(now-currentTime, 0U, duration);
 
       //Here I add anything that has to run when the animation is in its done state
       if(isDone){
@@ -176,11 +176,12 @@ Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsig
       return Point(new_x, new_y);
     }
 
-bool UIElement::isFocused(){
+bool UIElement::isFocused() const {
   return m_parent_ui->focus.focusedElementID==m_UUID;
 }
 
-void UIElement::drawFocusOutline(){
+void UIElement::drawFocusOutline() const {
+  INSTRUMENTATE(m_parent_ui)
   if (focus_style == FocusStyle::Outline && isFocused()) {
 
     Point rect_drawing_pos = getDrawPoint();
@@ -221,6 +222,7 @@ void UIElement::drawFocusOutline(){
 }
 
 void UIElement::render(){
+  INSTRUMENTATE(m_parent_ui)
   drawFocusOutline();
 }
 
@@ -235,12 +237,13 @@ Point UIElement::getCenterPoint() const {
 //--------------------UIImage CLASS---------------------------------------------------------------//
 
 void UIImage::render(){
+  INSTRUMENTATE(m_parent_ui)
   drawFocusOutline();
   anim.update();
   
 
   const float m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
-  Image drawing_image = m_scale_fac != 1 ? scale(*m_body, m_scale_fac) : *m_body;
+  Texture drawing_image = m_scale_fac != 1 ? scale(*m_body, m_scale_fac) : *m_body;
   Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
   if(drawing_image.data.colorspace == PixelType::Mono){
     m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
@@ -254,6 +257,7 @@ void UIImage::render(){
 //--------------------AnimatedApp CLASS---------------------------------------------------------------//
 
 void AnimatedApp::m_computeAnimation(){
+  INSTRUMENTATE(m_parent_ui)
   if (m_parent_ui->focus.hasChanged() || (m_parent_ui->focus.isFirstBoot && isFocused()))
   {
     if(isFocused()){  
@@ -311,12 +315,13 @@ void AnimatedApp::m_computeAnimation(){
 }
 
 void AnimatedApp::render(){
+  INSTRUMENTATE(m_parent_ui)
   anim.update();
   if (focus_style == FocusStyle::Animation)
     m_computeAnimation();
  
   const float scale_fac = anim.getProgress();
-  Image drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
+  Texture drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
   Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
   if(drawing_image.data.colorspace == PixelType::Mono){
     m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
@@ -348,8 +353,8 @@ Checkbox::Checkbox(Outline style, Point pos, unsigned int width, unsigned int he
       outline.radius = std::clamp(outline.radius, 0U, static_cast<unsigned int>((width >= height ? height : width)*0.5f));
     }
 
-void Checkbox::m_drawCheckboxOutline(){
- 
+void Checkbox::m_drawCheckboxOutline() const {
+  INSTRUMENTATE(m_parent_ui)
   int16_t draw_width = m_width;
   int16_t draw_height = m_height;
   Point rect_drawing_pos = getDrawPoint();
@@ -384,6 +389,7 @@ void Checkbox::m_drawCheckboxOutline(){
 }
 
 void Checkbox::render(){
+  INSTRUMENTATE(m_parent_ui)
   m_drawCheckboxOutline();
   if(m_state){
     Point fill_pos = getDrawPoint();
@@ -408,8 +414,7 @@ Scene::Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus){
     primaryElementID = first_focus.getId();
   }
 
-void Scene::renderScene()
-  {
+void Scene::renderScene() const {
     for (const auto&[id, element] : elements)
     {
       if(element->draw){
@@ -420,7 +425,7 @@ void Scene::renderScene()
     }
   }
 
-UIElement* Scene::getElementByUUID(std::string UUID){
+UIElement* Scene::getElementByUUID(std::string UUID) const {
   return elements.at(UUID);
 }
 
@@ -452,6 +457,7 @@ void UI::focusScene(Scene& scene){
 /// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
 /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
 void UI::focusDirection(unsigned int direction, FocusingAlgorithm alg){
+  INSTRUMENTATE(this)
   if(isFocusingFree()){
     m_focusing_busy = true;
     UIElement* next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.focusedScene, focus.focusedScene->getElementByUUID(focus.focusedElementID));
@@ -467,6 +473,20 @@ void UI::update(){
   m_focusing_busy = false;
 }
 
+#if PERFORMANCE_PROFILING
+void UI::printPerfStats(){
+  for(const auto& [name, time] : m_perfValues){
+    Serial.printf("%s = %dus\n", name.c_str(), time);
+  }
+}
+
+void UI::m_addPerf(std::string key, uint32_t time){
+  uint32_t tempVal = m_perfValues[key];
+  if(time > tempVal){
+    m_perfValues[key] = time;
+  }
+}
+#endif 
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
 
@@ -491,7 +511,8 @@ const Point UiUtils::centerPos(int x_pos, int y_pos, const unsigned int w, const
     return Point(new_x, new_y);
   }
 
-UIElement* UiUtils::SignedDistance(unsigned int direction, FocusingSettings& settings, FocusingAlgorithm& alg, Scene*& scene, UIElement* focused){
+UIElement* UiUtils::SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused){
+    INSTRUMENTATE(focused->getParentUI())
     if (alg == FocusingAlgorithm::Linear)
     {
       Ray ray{settings.max_distance, 1, direction};
@@ -556,7 +577,7 @@ std::set<Point> UiUtils::computeConePoints(Point vertex, Cone cone){
   return buffer;
 }
 
-UIElement* UiUtils::findElementInCone(UIElement*& focused, Scene*& currentScene, const Cone& cone){
+UIElement* UiUtils::findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone){
   focused->focusable = false;
 
   const int half_aperture = static_cast<int>(cone.aperture * 0.5);
@@ -570,7 +591,8 @@ UIElement* UiUtils::findElementInCone(UIElement*& focused, Scene*& currentScene,
   {
     for (int b = 0; b < cone.radius; b += cone.rad_step)
     {
-      tempPoint = polarToCartesian(b, i) + centerPoint;
+      tempPoint = polarToCartesian(b, i);
+      tempPoint += centerPoint;
       for(const auto&[id, element] : currentScene->elements){
         if (element->focusable && isPointInElement(tempPoint, element)){
           focused->focusable = true;
@@ -583,13 +605,14 @@ UIElement* UiUtils::findElementInCone(UIElement*& focused, Scene*& currentScene,
   return nullptr;
 }
 
-UIElement* UiUtils::findElementInRay(UIElement*& focused, Scene*& currentScene, const Ray& ray){
+UIElement* UiUtils::findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray){
   focused->focusable = false;
   const Point centerPoint = focused->getCenterPoint();
   Point tempPoint;
   
   for(int i = 0; i<ray.ray_length; i+=ray.step){
-    tempPoint = polarToCartesian(i, ray.direction) + centerPoint;
+    tempPoint = polarToCartesian(i, ray.direction);
+    tempPoint += centerPoint;
     for(const auto&[id, element] : currentScene->elements){
       if (element->focusable && isPointInElement(tempPoint, element)){
         focused->focusable = true;

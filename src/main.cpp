@@ -28,14 +28,14 @@ Button button2(25);
 Button button3(27);
 std::vector<Button*> buttons = {&button1, &button2, &button3};
 
-Image playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test);
-Image smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test);
+Texture playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test);
+Texture smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test);
 
-Image largeGallery(HOME_LARGE_GALLERY_SIZE, HOME_LARGE_GALLERY_SIZE, home_large_gallery);
-Image smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small_gallery);
+Texture largeGallery(HOME_LARGE_GALLERY_SIZE, HOME_LARGE_GALLERY_SIZE, home_large_gallery);
+Texture smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small_gallery);
 
-Image largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings);
-Image smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
+Texture largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings);
+Texture smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
 
 AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  true, FocusStyle::Animation);
@@ -94,8 +94,22 @@ void handleComms( void *pvParameters){
           Serial.println("Type: UIElement");
         else if (obj->type == ElementType::UIImage)
           Serial.println("Type: UIImage");
+        else if (obj->type == ElementType::Checkbox)
+          Serial.println("Type: Checkbox");
         else 
           Serial.println("Type: AnimatedApp");
+      }
+      else if (input == "perfstats")
+      {
+        #if PERFORMANCE_PROFILING
+          ui.printPerfStats();
+        #else
+          Serial.println("Performance profiling is turned off!");
+        #endif
+      }
+      else if (input == "uintsize")
+      {
+        Serial.println(sizeof(unsigned long));
       }
     }
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -147,7 +161,7 @@ void setup() {
 }
 
 //-------------BEFORE LOOP----------------//
-uint64_t start = micros(), calcStart = micros();
+uint32_t start = micros(), calcStart = micros();
 //-------------BEFORE LOOP----------------//
 
 

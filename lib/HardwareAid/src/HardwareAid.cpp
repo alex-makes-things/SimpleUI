@@ -5,7 +5,7 @@
 void Button::updateState()
 {
     state = digitalRead(pin);
-    if (micros() - m_last_update >= 2500) //Short delay of 5ms to prevent weird things from happening
+    if (micros() - m_last_update >= 2500UL) //Short delay of 5ms to prevent weird things from happening
     {
         if (state && (state != prevState))
         {
@@ -20,7 +20,7 @@ void Button::updateState()
 
 
 
-void Button::setup(){
+void Button::setup() const {
     pinMode(pin, INPUT);
   }
 
@@ -47,7 +47,7 @@ void ButtonUtils::setupButtons(const std::vector<Button*>& myButtons) {
     }
 }
 
-uint64_t ButtonUtils::getMostRecentUpdate(const std::vector<Button*>& myButtons){
+uint32_t ButtonUtils::getMostRecentUpdate(const std::vector<Button*>& myButtons){
   Button* mostRecent = *std::max_element(myButtons.begin(), myButtons.end(),
         [](const Button* a, const Button* b) {return a->m_last_update < a->m_last_update;});
   return mostRecent->m_last_update;

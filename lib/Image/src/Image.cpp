@@ -7,7 +7,7 @@ const float Fmap(const float x, const float in_min, const float in_max, const fl
 const float Flerp(const float v0, const float v1, const float t) {
   return (1 - t) * v0 + t * v1;
 }
-bool dirtyRects(Image first, Image second){
+bool dirtyRects(Texture first, Texture second){
     if(!(first.width == second.width && first.height == second.height && first.data.colorspace == second.data.colorspace)) return false;
     bool areDifferent=true;
     size_t len = first.width * first.height;
@@ -61,22 +61,22 @@ const uint16_t hex(std::string hex) {
     }
 }
 
-int ArrUtils::getArrSize8(int width, int height, float scale_fac) {
+int Texture::getArrSize8(int width, int height, float scale_fac) {
         int w = static_cast<int>(width * scale_fac);
         int h = static_cast<int>(height * scale_fac);
         int bytes_per_row = (w + 7) / 8;  // round up to nearest byte
         return bytes_per_row * h;
     }
-int ArrUtils::getArrSize16 (int width, int height, float scale_fac){
+int Texture::getArrSize16 (int width, int height, float scale_fac){
     return (static_cast<int>(width * scale_fac) * static_cast<int>(height * scale_fac));
     }
 
-const Image scale(Image& input, const float scaling_factor){
+const Texture scale(Texture& input, const float scaling_factor){
     const unsigned int scaled_width = static_cast<const unsigned int>(input.width * scaling_factor);
     const unsigned int scaled_height = static_cast<const unsigned int>(input.height * scaling_factor);
 
     if(input.data.colorspace==PixelType::Mono){
-        const size_t outputArrSize = ArrUtils::getArrSize8(scaled_width, scaled_height, 1.0f);
+        const size_t outputArrSize = Texture::getArrSize8(scaled_width, scaled_height, 1.0f);
         uint8_t *buffer = new uint8_t[outputArrSize];
         std::fill(buffer, buffer + outputArrSize, 0);
 
@@ -105,10 +105,10 @@ const Image scale(Image& input, const float scaling_factor){
                 }
             }
         }
-        return Image(scaled_width, scaled_height, std::move(buffer), true);
+        return Texture(scaled_width, scaled_height, std::move(buffer), true);
     }
     else{
-        size_t outputArrSize = ArrUtils::getArrSize16(scaled_width, scaled_height, 1.0f);
+        size_t outputArrSize = Texture::getArrSize16(scaled_width, scaled_height, 1.0f);
         uint16_t *buffer = new uint16_t[outputArrSize];
 
         const float inv_scaling = 1.0f / scaling_factor;
@@ -120,6 +120,6 @@ const Image scale(Image& input, const float scaling_factor){
                 buffer[y * scaled_width + x] = input.data.rgb565[(src_y * input.width) + src_x];
             }
         }
-        return Image(scaled_width, scaled_height, std::move(buffer), true);
+        return Texture(scaled_width, scaled_height, std::move(buffer), true);
     }
 }
