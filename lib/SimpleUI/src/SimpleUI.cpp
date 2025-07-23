@@ -1,4 +1,5 @@
-#include <UIAssist.h>
+#include "SimpleUI.h"
+#include "UUIDbuddy.h"
 
 namespace SimpleUI{
 //--------------------Cone STRUCT---------------------------------------------------------------//
@@ -169,7 +170,7 @@ namespace SimpleUI{
 //--------------------UIElement CLASS---------------------------------------------------------------//
 
   UIElement::UIElement(unsigned int w, unsigned int h, Point pos, ElementType element, FocusStyle style) 
-  : type(element), m_width(w), m_height(h), m_position(pos), focus_style(style){}
+  : type(element), m_width(w), m_height(h), m_position(pos), focus_style(style), m_UUID(UUIDbuddy::generateUUID()){}
 
   Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h) const {
         unsigned int new_x = static_cast<unsigned int>(static_cast<float>(x_pos)-(static_cast<float>(w)*0.5f));
@@ -497,108 +498,128 @@ namespace SimpleUI{
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
   namespace UiUtils{
-  bool isPointInElement(Point point, UIElement* element){
-      const Point element_pos = element->getPos();
-      if ((point.x >= element_pos.x && point.x <= element_pos.x + element->getWidth()) && (point.y >= element_pos.y && point.y <= element_pos.y + element->getHeight())){
-        return true;
-      }
-      return false;
-    }
-
-  /*!
-      @param x_pos  X coordinate of the top-left corner
-      @param y_pos  Y coordinate of the top-left corner
-      @param w      Width in pixels
-      @param h      Height in pixels
-      @return The center point of the described boundary
-    */
-  const Point centerPos(int x_pos, int y_pos, const unsigned int w, const unsigned int h){
-      int new_x = round(static_cast<float>(x_pos)+(w*0.5f));
-      int new_y = round(static_cast<float>(y_pos)+(h*0.5f));
-      return Point(new_x, new_y);
-    }
-
-  UIElement* SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused){
-      INSTRUMENTATE(focused->getParentUI())
-      if (alg == FocusingAlgorithm::Linear)
-      {
-        Ray ray{settings.max_distance, 1, direction};
-        switch (settings.accuracy)
-        {
-        case Quality::Low:
-          ray.step = 4;
-          break;
-        case Quality::Medium:
-          ray.step = 2;
-          break;
-        case Quality::High:
-          ray.step = 1;
-          break;
+    bool isPointInElement(Point point, UIElement* element){
+        const Point element_pos = element->getPos();
+        if ((point.x >= element_pos.x && point.x <= element_pos.x + element->getWidth()) && (point.y >= element_pos.y && point.y <= element_pos.y + element->getHeight())){
+          return true;
         }
-        return findElementInRay(focused, scene, ray);
+        return false;
       }
 
-      else  //IF THE METHOD IS CONE
-      {
-        Cone cone(direction, settings.max_distance, 90, 2, 6);
-        switch (settings.accuracy){
+    /*!
+        @param x_pos  X coordinate of the top-left corner
+        @param y_pos  Y coordinate of the top-left corner
+        @param w      Width in pixels
+        @param h      Height in pixels
+        @return The center point of the described boundary
+      */
+    const Point centerPos(int x_pos, int y_pos, const unsigned int w, const unsigned int h){
+        int new_x = round(static_cast<float>(x_pos)+(w*0.5f));
+        int new_y = round(static_cast<float>(y_pos)+(h*0.5f));
+        return Point(new_x, new_y);
+      }
+
+    UIElement* SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused){
+        INSTRUMENTATE(focused->getParentUI())
+        if (alg == FocusingAlgorithm::Linear)
+        {
+          Ray ray{settings.max_distance, 1, direction};
+          switch (settings.accuracy)
+          {
           case Quality::Low:
-            cone.aperture_step = 3;
-            cone.rad_step = 8;
+            ray.step = 4;
             break;
           case Quality::Medium:
-            cone.aperture_step = 2;
-            cone.rad_step = 6;
+            ray.step = 2;
             break;
           case Quality::High:
-            cone.aperture_step = 1;
-            cone.rad_step = 2;
+            ray.step = 1;
             break;
           }
-        return findElementInCone(focused, scene, cone);
-      }
+          return findElementInRay(focused, scene, ray);
+        }
 
-      return nullptr;
-  }
+        else  //IF THE METHOD IS CONE
+        {
+          Cone cone(direction, settings.max_distance, 90, 2, 6);
+          switch (settings.accuracy){
+            case Quality::Low:
+              cone.aperture_step = 3;
+              cone.rad_step = 8;
+              break;
+            case Quality::Medium:
+              cone.aperture_step = 2;
+              cone.rad_step = 6;
+              break;
+            case Quality::High:
+              cone.aperture_step = 1;
+              cone.rad_step = 2;
+              break;
+            }
+          return findElementInCone(focused, scene, cone);
+        }
 
-  Point polarToCartesian(const float radius, const float angle){
-    return Point(radius * cos(-angle * degToRadCoefficient), //x
-                radius * sin(-angle * degToRadCoefficient));//y
-  }
-
-  std::set<Point> computeConePoints(Point vertex, Cone cone){
-    std::set<Point> buffer;
-
-    int half_aperture = cone.aperture/2;
-    int starting_angle = cone.bisector - half_aperture;
-    int end_angle = cone.bisector + half_aperture;
-
-    for(int i = starting_angle; i<end_angle; i+=cone.aperture_step){
-      for(int b = 0; b<cone.radius; b+=cone.rad_step){
-        Point tempPoint = polarToCartesian(b, i);
-        tempPoint.x += vertex.x;
-        tempPoint.y += vertex.y;
-        buffer.emplace(tempPoint);
-      }
+        return nullptr;
     }
-    return buffer;
-  }
 
-  UIElement* findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone){
-    focused->focusable = false;
+    Point polarToCartesian(const float radius, const float angle){
+      return Point(radius * cos(-angle * degToRadCoefficient), //x
+                  radius * sin(-angle * degToRadCoefficient));//y
+    }
 
-    const int half_aperture = static_cast<int>(cone.aperture * 0.5);
-    const int starting_angle = cone.bisector - half_aperture;
-    const int end_angle = cone.bisector + half_aperture;
-    const Point centerPoint = focused->getCenterPoint();
+    std::set<Point> computeConePoints(Point vertex, Cone cone){
+      std::set<Point> buffer;
+
+      int half_aperture = cone.aperture/2;
+      int starting_angle = cone.bisector - half_aperture;
+      int end_angle = cone.bisector + half_aperture;
+
+      for(int i = starting_angle; i<end_angle; i+=cone.aperture_step){
+        for(int b = 0; b<cone.radius; b+=cone.rad_step){
+          Point tempPoint = polarToCartesian(b, i);
+          tempPoint.x += vertex.x;
+          tempPoint.y += vertex.y;
+          buffer.emplace(tempPoint);
+        }
+      }
+      return buffer;
+    }
+
+    UIElement* findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone){
+      focused->focusable = false;
+
+      const int half_aperture = static_cast<int>(cone.aperture * 0.5);
+      const int starting_angle = cone.bisector - half_aperture;
+      const int end_angle = cone.bisector + half_aperture;
+      const Point centerPoint = focused->getCenterPoint();
 
 
-    Point tempPoint;
-    for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
-    {
-      for (int b = 0; b < cone.radius; b += cone.rad_step)
+      Point tempPoint;
+      for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
       {
-        tempPoint = polarToCartesian(b, i);
+        for (int b = 0; b < cone.radius; b += cone.rad_step)
+        {
+          tempPoint = polarToCartesian(b, i);
+          tempPoint += centerPoint;
+          for(const auto&[id, element] : currentScene->elements){
+            if (element->focusable && isPointInElement(tempPoint, element)){
+              focused->focusable = true;
+              return element;
+            }
+          }
+        }
+      }
+      focused->focusable = true;
+      return nullptr;
+    }
+
+    UIElement* findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray){
+      focused->focusable = false;
+      const Point centerPoint = focused->getCenterPoint();
+      Point tempPoint;
+      
+      for(int i = 0; i<ray.ray_length; i+=ray.step){
+        tempPoint = polarToCartesian(i, ray.direction);
         tempPoint += centerPoint;
         for(const auto&[id, element] : currentScene->elements){
           if (element->focusable && isPointInElement(tempPoint, element)){
@@ -607,28 +628,8 @@ namespace SimpleUI{
           }
         }
       }
+      focused->focusable = true;
+      return nullptr;
     }
-    focused->focusable = true;
-    return nullptr;
-  }
-
-  UIElement* findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray){
-    focused->focusable = false;
-    const Point centerPoint = focused->getCenterPoint();
-    Point tempPoint;
-    
-    for(int i = 0; i<ray.ray_length; i+=ray.step){
-      tempPoint = polarToCartesian(i, ray.direction);
-      tempPoint += centerPoint;
-      for(const auto&[id, element] : currentScene->elements){
-        if (element->focusable && isPointInElement(tempPoint, element)){
-          focused->focusable = true;
-          return element;
-        }
-      }
-    }
-    focused->focusable = true;
-    return nullptr;
-  }
   };
 };

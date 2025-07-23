@@ -1,0 +1,18 @@
+{
+  "name": "SimpleUI",
+  "version": "1.0.0",
+  "description": "A simple UI library",
+  "headers" : "SimpleUI.h",
+  "build": {
+    "includeDir": ".",
+    "srcDir": "src",
+    "srcFilter": [
+      "+<../**/*.cpp>",
+      "+<../**/*.h>"
+    ],
+    "flags": [
+      "-I deps/",
+      "-I deps/Texture"
+    ]
+  }
+}

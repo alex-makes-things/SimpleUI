@@ -1,8 +1,7 @@
 #pragma once
-#include <Image.h>
+#include "Texture.h"
 #include <vector>
 #include <unordered_map>
-#include <UUIDbuddy.h>
 #include <Adafruit_GFX.h>
 #include <set>
 #include <functional>
@@ -261,7 +260,7 @@ namespace SimpleUI{
       Point m_position;
       bool m_overrideAnimationScaling = false;
       unsigned int m_width=0, m_height=0;
-      const std::string m_UUID = RandomBuddy::generateUUID();
+      const std::string m_UUID;
       UI* m_parent_ui;
   };
 

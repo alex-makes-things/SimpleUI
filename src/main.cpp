@@ -4,7 +4,7 @@
 #include <SPI.h>
 #include <images/home_images.h>
 #include <images/nicerlandscape.h>
-#include <UIAssist.h>
+#include <SimpleUI.h>
 #include <HardwareAid.h>
 
 #define SDA 21
@@ -18,9 +18,9 @@
 using namespace ButtonUtils;
 using namespace SimpleUI;
 
-SPIClass spi = SPIClass(VSPI);
-Adafruit_ST7735 tft = Adafruit_ST7735(&spi, -1, DC, RST);
-GFXcanvas16 canvas = GFXcanvas16(SCREENWIDTH, SCREENHEIGHT);
+SPIClass spi(VSPI);
+Adafruit_ST7735 tft(&spi, -1, DC, RST);
+GFXcanvas16 canvas(SCREENWIDTH, SCREENHEIGHT);
 
 
 //--------------------------UI SETUP-----------------------------//
