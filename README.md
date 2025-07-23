@@ -1,7 +1,7 @@
 
-# ESP-UI
+# SimpleUI
 
-This is a versatile library for creating GUIs, made to be user-friendly, have simple syntax and be memory efficient. With ESP-UI, you can easily animate objects, images, icons, and thanks to the advanced focusing system, you only have to bind navigation inputs and the library will handle the focusing automatically, supporting every bizzare layout.
+This is a versatile library for creating GUIs, made to be user-friendly, have simple syntax and be memory efficient. With SimpleUI, you can easily animate objects, images, icons, and thanks to the advanced focusing system, you only have to bind navigation inputs and the library will handle the focusing automatically, supporting every bizzare layout.
 
 
 
@@ -17,7 +17,7 @@ Not ready yet.
 ## Optimizations
 The library works in a non-destructive way, meaning you declare every Ui element yourself.
 The inner workings make sure to be memory-friendly by using mostly pointers to avoid the duplication of large arrays or objects, and memory leaks are avoided by making sure that the memory allocated by the library is always freed.
-ESP-UI makes extensive use of STL functions, using unordered maps, vectors, and mathematical functions.
+SimpleUI makes extensive use of the C++ standard library, leveraging unordered maps, vectors, mathematical functions, initializer lists and more.
 
 
 ## Authors
