@@ -16,6 +16,7 @@
 #define BACKLIGHT 4
 
 using namespace ButtonUtils;
+using namespace SimpleUI;
 
 SPIClass spi = SPIClass(VSPI);
 Adafruit_ST7735 tft = Adafruit_ST7735(&spi, -1, DC, RST);
@@ -223,7 +224,7 @@ void loop() {
     }
 
     if(button3.clickedOnce){
-      ui.focus.focusedScene->getElementByUUID(ui.focus.focusedElementID)->click();
+      ui.getFocused()->click();
     }
     
     calcStart = micros();
@@ -238,7 +239,6 @@ void loop() {
     
   //TEMPORAL VARIABLES AND FUNCTIONS
     rememberButtons(buttons);
-    ui.update();
     frameTime = micros()-start;
     start = micros();
 }
