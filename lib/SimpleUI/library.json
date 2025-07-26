@@ -12,7 +12,8 @@
     ],
     "flags": [
       "-I deps/",
-      "-I deps/Texture"
+      "-I deps/Texture",
+      "-I deps/Animation"
     ]
   }
 }

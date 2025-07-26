@@ -72,6 +72,8 @@ int Texture::getArrSize16 (int width, int height, float scale_fac){
     }
 
 const Texture scale(Texture& input, const float scaling_factor){
+    if (scaling_factor == 1.0f)
+        return input;
     const unsigned int scaled_width = static_cast<const unsigned int>(input.width * scaling_factor);
     const unsigned int scaled_height = static_cast<const unsigned int>(input.height * scaling_factor);
 

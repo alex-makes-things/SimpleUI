@@ -1,5 +1,7 @@
 #pragma once
 #include "Texture.h"
+#include "UUIDbuddy.h"
+#include "Animation.h"
 #include <vector>
 #include <unordered_map>
 #include <Adafruit_GFX.h>
@@ -7,6 +9,7 @@
 #include <functional>
 
 #define PERFORMANCE_PROFILING 0
+#define LOG(x) Serial.println(x)
 
 #define RIGHT 0
 #define UP 90
@@ -19,12 +22,12 @@
     #define INSTRUMENTATE(ui)  
 #endif
 
+// Index, quickly find all declarations/definitions
 namespace SimpleUI
 {
   class UI;
   class UIElement;
   class AnimatedApp;
-  class Animator;
   class UIImage;
   struct Point;
   struct Cone;
@@ -37,6 +40,7 @@ namespace SimpleUI
   enum class Direction;
   enum class FocusingAlgorithm;
   enum class FocusStyle;
+  enum class Constraint;
 }
 
 
@@ -52,12 +56,24 @@ namespace SimpleUI{
   enum class Direction{Up=90, Down=270, Left=180, Right=0};
   enum class FocusingAlgorithm{Linear, Cone};
   enum class FocusStyle{None, Animation, Outline, Color};
+  enum class Constraint{
+    TopLeft,    Top,      TopRight,
+
+    Left,       Center,   Right,
+
+    BottomLeft, Bottom,   BottomRight
+  };
 
   struct Point{
-    int x=0;   //X coordinate of the point 
-    int y=0;   //Y coordinate of the point
+    int x;   //X coordinate of the point 
+    int y;   //Y coordinate of the point
     
-    Point(int posx=0, int posy=0);
+    /*!
+      @brief Represent a 2D point with integer coordinates.
+      @param    x   X coordinate of the point
+      @param    y   Y coordinate of the point
+    */
+    Point(int posx=0, int posy=0) : x(posx), y(posy){};
 
     bool operator<(const Point &other) const
     {
@@ -115,14 +131,15 @@ namespace SimpleUI{
   struct Focus{
     std::string focusedElementID;
     std::string previousElementID;
-    Scene* focusedScene = nullptr;
-    bool isFirstBoot = true;
-    inline Focus(std::string ele = "");
+    Scene* previousScene;
+    Scene* activeScene;
+    Focus(std::string ele = ""):focusedElementID(ele), activeScene(nullptr), previousScene(nullptr), previousElementID(""){};
     inline void focus(std::string ele);
     inline void update();
-    inline bool hasChanged();
+    inline bool hasChanged() const;
     inline bool isFocusing(std::string obj);
     inline bool isFocusing(UIElement *obj);
+    void focusScene(Scene* scene);
   };
 
   struct FocusingSettings{
@@ -141,125 +158,65 @@ namespace SimpleUI{
       @param distance   Distance in pixels from the outline to the outlined element
       @param radius     Radius in pixels of the corners
       @param color      RGB565 color of the outline
-  */
-    Outline(unsigned int thickness=1, unsigned int distance=0, unsigned int radius = 0, uint16_t color=0xffff) : thickness(thickness), border_distance(distance), color(color), radius(radius){}
-  };
-
-  class Animator{
-    public:
-    /*!
-      @brief Animation constructor
-      @param i Initial value
-      @param f Final value
-      @param d The duration of the animation from initial to final in milliseconds
     */
-    Animator(float i=0, float f=0, unsigned int d=0);
-
-    //Updates the animation logic and attributes
-    void update();
-    //Set the duration of the animation to the passed unsigned integer
-    inline void setDuration(unsigned int d) { duration = d; }
-    //Set the initial value to the passed unsigned integer
-    inline void setInitial(float i)
-    {
-      initial = i;
-      progress = (progress < initial) ? initial : progress;
-    }
-    //Set the final value to the passed unsigned integer
-    inline void setFinal(float f)
-    {
-      final = f;
-      progress = (progress > final) ? final : progress;
-    }
-    //Set the looping setting to the passed bool
-    inline void setLoop(bool loop) { looping = loop; }
-    //Set the breathing setting to the passed bool
-    inline void setBreathing(bool breathe) { breathing = breathe; }
-    //Set the reverse setting to the passed bool
-    inline void setReverse(bool rev);
-    //Starts the animation
-    void start();
-    //Pauses the animation
-    void stop();
-    //Switches the enable key, if true it becomes false and viceversa
-    void switchState();
-    //!@return A float representing the current progress in the animation
-    inline float getProgress() const { return progress; }
-    //!@return True if the animation is at the ending point
-    inline bool getDone() const { return isDone; }
-    //!@return True if the animation is at the starting point
-    inline bool getStart() const { return isAtStart; }
-    //!@return True if the animation is not stopped
-    inline bool getIsEnabled() const { return enable; }
-    //!@return True if the animation is going backwards
-    inline bool getDirection() const { return reverse; }
-    //Resets the animation's settings to the defaults (all false)
-    inline void defaultModifiers();
-    //Makes the animation restart, works even with reverse
-    void resetAnim();
-    //Function that can be called at any time which inverts the direction of the animation
-    inline void invert();
-
-  private:
-    static constexpr float EPSILON = 0.0005f;
-    bool isAtStart = true;  // If true, the animation is in its starting point
-    bool isDone = false;    // Signals if the animation is complete or not
-    bool looping = false;   // Makes the animation loop if true
-    bool reverse = false;   //"Inverts" the final and initial values, (just in the calculations)
-    bool breathing = false; // Gives a breathing effect to the animation, so it animates back to its starting point after reaching its target
-    bool bounce_done = false;
-    bool enable = false;   // If false, the animation is paused
-    unsigned int duration; // How long the animation takes to go from initial to final and viceversa, input as ms but converted to us
-    float initial;
-    float final;
-    float progress;                  // The progress is ultimately the output of the structure, which lies clamped in between initial and final
-    uint32_t currentTime = micros(); // This is needed for the temporal aspect of the interpolation
-    uint32_t now = micros();         // This is used for synchronicity so that every cycle uses the same time reference
-    uint32_t elapsed = 0;            // The amount of time that has passed while the animation was running
+    Outline(unsigned int thickness=1, unsigned int distance=0, unsigned int radius = 0, uint16_t color=0xffff) : thickness(thickness), border_distance(distance), color(color), radius(radius){}
   };
 
   //Generic UI element, all interactable elements inherit from this
   class UIElement{
     public:
-      bool focusable = true;
-      Animator anim;
+
+      bool focusable;
+      Animation anim;
       const ElementType type;
       FocusStyle focus_style;
       Outline focus_outline;
-      bool centered = false; //If true, the element will be drawn with its center being the coordinates passed to the constructor
-      bool draw=true; //If true, the element is drawn, if false it's kept hidden.
+      bool centered;      //If true, the element will be drawn with its center being the coordinates passed to the constructor
+      bool draw;          //If true, the element is drawn, if false it's kept hidden.
+
     public:
-      UIElement(unsigned int w=0, unsigned int h=0, Point pos = {0,0}, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None);
+      friend class UI;
+      friend class Scene;
+      UIElement(unsigned int w=0, unsigned int h=0, Point pos={0,0}, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None, bool isCentered = false)
+      : type(element), m_width(w), m_height(h), m_position(pos), focus_style(style), m_UUID(UUIDbuddy::generateUUID()),
+        focusable(true), draw(true), centered(isCentered){};
+
       virtual ~UIElement(){};
-      void InitAnim(float initial, float final, unsigned int duration){anim = Animator(initial, final, duration);}
+
+      void InitAnim(float initial, float final, unsigned int duration){anim = Animation(initial, final, duration);}
+
       inline void setPosX(unsigned int X) { m_position.x = X; }
       inline void setPosY(unsigned int Y) { m_position.y = Y; }
       inline void setPos(Point pos){m_position=pos;}
+      inline void setCenter(bool center) { centered = center; }
       /*!
         @brief Set the UI listener, this allows the element to access its parent UI's attributes and API
         @param listener A pointer to the UI object that "owns" the element
       */
       inline void setUiListener(UI *listener) { m_parent_ui = listener; }
+
       //!@return The element's UUID
       inline std::string getId() const { return m_UUID; }
       inline Point getPos() const { return m_position; }
       inline unsigned int getWidth() const { return m_width; }
       inline unsigned int getHeight() const { return m_height; }
       inline UI* getParentUI() const { return m_parent_ui; }
+      Point getDrawPoint() const;
+      Point getCenterPoint() const;
+
       virtual void render();
       // Interact with the element
       virtual void click(){return;}
-      inline bool isAnimating() const {return !(anim.getDone() || anim.getStart());}
+
+      inline bool isAnimating() const {return anim.getState() == AnimState::Running;}
       inline bool isFocused() const;
-      inline void setCenter(bool center) { centered = center; }
-      Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h) const ;
-      Point getDrawPoint() const;
-      Point getCenterPoint() const;
+
+      static Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h);
       void drawFocusOutline() const;
     protected:
       Point m_position;
       bool m_overrideAnimationScaling = false;
-      unsigned int m_width=0, m_height=0;
+      unsigned int m_width, m_height;
       const std::string m_UUID;
       UI* m_parent_ui;
   };
@@ -267,58 +224,82 @@ namespace SimpleUI{
   //Used to represent any Image with the tools provided by the library
   class UIImage : public UIElement{
   public:
-    UIImage(Texture &img, Point pos, FocusStyle focus_style = FocusStyle::None): UIElement(img.width, img.height, pos, ElementType::UIImage, focus_style), m_body(&img){}
-    /// @param scale If negative, the scale is controlled by the animation.
+    UIImage(Texture &img, Point pos, FocusStyle focus_style = FocusStyle::None)
+    : UIElement(img.width, img.height, pos, ElementType::UIImage, focus_style), m_body(&img), m_mono_color(0xffff), m_scale_fac(1.0f){}
+
     inline void setScale(float scale){m_scale_fac = scale;
                                       m_overrideAnimationScaling = (scale < 0) ? false : true;}
-    inline float getScale() const { return m_scale_fac; }
     inline void setColor(uint16_t hue) { m_mono_color = hue; }
     inline void setImg(Texture *img){m_body = img; m_width = img->width; m_height = img->height;}
+
+    /// @param scale If negative, the scale is controlled by the animation.
+    inline float getScale() const { return m_scale_fac; }
     inline Texture *getImg() const { return m_body; }
+    
+
     void render() override;
 
   protected:
     Texture *m_body;
-    float m_scale_fac = 1;
-    uint16_t m_mono_color = 0xffff;
+    float m_scale_fac;
+    uint16_t m_mono_color;
   };
 
   // This is a heavily interactable element which animates from a Texture to another when focused/unfocused, and clicking it can trigger an event
   class AnimatedApp : public UIElement{
     public:
-      AnimatedApp(Texture& unfocused, Texture& focused, Point pos, bool isCentered, FocusStyle focus_style):UIElement(unfocused.width, unfocused.height, pos, ElementType::AnimatedApp, focus_style){
-        centered = isCentered;
-        m_unselected = &unfocused;
-        m_selected = &focused;
-        m_showing = m_unselected;
-        m_ratio = static_cast<float>(focused.width) / static_cast<float>(unfocused.width);
-        anim = Animator(1, m_ratio, 75);
+
+      AnimatedApp(Texture& unfocused, Texture& focused, Point pos, unsigned int duration, bool isCentered)
+        : UIElement(unfocused.width, unfocused.height, pos, ElementType::AnimatedApp, FocusStyle::Animation, isCentered), m_mono_color(0xffff), m_unselected(&unfocused), 
+          m_selected(&focused), m_showing(m_unselected), m_ratio(static_cast<float>(focused.width) / static_cast<float>(unfocused.width)), m_duration(duration){
+        anim = Animation(1.0f, m_ratio, duration);
+        anim.Start();
+        anim.Pause();
       }
       
       void render() override;
-      inline Texture* getActive(){return m_showing;}
+      inline Texture* getActive() const {return m_showing;}
       inline void setColor(uint16_t hue){m_mono_color = hue;}
       void click() override{
         m_onClick();
       }
       void bind(const std::function<void()>& func){m_onClick = func;}
+
     protected:
       void m_computeAnimation();
       std::function<void()> m_onClick = [](){return;};
-      uint16_t m_mono_color = 0xffff;
-      Texture* m_unselected = nullptr; //This points to the image that is displayed when the element is unfocused
-      Texture* m_selected = nullptr;  //This points to the image that is displayed when the element is focused
-      Texture* m_showing = nullptr;  //This points to the image that is currently being displayed
+    protected:
+      unsigned int m_duration;
+      uint16_t m_mono_color;  //Color used to draw the textures
+      Texture* m_unselected;  //This points to the image that is displayed when the element is unfocused
+      Texture* m_selected;    //This points to the image that is displayed when the element is focused
+      Texture* m_showing;     //This points to the image that is currently being displayed
       float m_ratio;
     };
 
   // Extremely customizable yet bare-bones, reliable and easy to work with.
   class Checkbox : public UIElement{
+
     public:
     Outline outline;           //The checkbox's outline.
     uint16_t selection_color;  //The color of the inside fill when the state is ON
     public:
-    Checkbox(Outline style, Point pos, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline);
+
+    /*!
+      @brief Create a checkbox element.
+      @param style        External outline
+      @param pos          Top left corner coordinates
+      @param width        Total width in pixels
+      @param height       Total height in pixels
+      @param fillcolor    RGB565 color of the inside fill
+      @param isCentered   Is the element centered around the provided coordinates?
+      @param focus_style  What method is used to signal a focus
+  */
+    Checkbox(Outline style, Point pos, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline)
+      :UIElement(width, height, pos, ElementType::Checkbox, focus_style, isCentered), outline(style), selection_color(fillColor), m_state(false){
+        focus_outline.border_distance=0U;
+        outline.radius = std::clamp(outline.radius, 0U, static_cast<unsigned int>((width >= height ? height : width)*0.5f));
+      };
     void render();
     void click() override{m_state = !m_state;}
     /// @return The current state of the checkbox
@@ -327,17 +308,23 @@ namespace SimpleUI{
     protected:
     void m_drawCheckboxOutline() const;
     protected:
-    bool m_state=false;
+    bool m_state;
   };
 
   //This is one of the most fundamental blocks of the library, it groups together elements and allows for extreme versatility
-  struct Scene{
+  class Scene{
+    friend class UI;
+    public:
     std::string name;
     std::string primaryElementID;
     std::unordered_map<std::string, UIElement*> elements;
-    Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus);
+    std::vector<Scene*> parents;
+
+    public:
+    Scene(std::vector<UIElement*> elementGroup, UIElement* first_focus);
     void renderScene() const;
     UIElement* getElementByUUID(std::string UUID) const;
+    void addParents(std::initializer_list<Scene*> scenes);
   };
 
   /*This is the object that has the power over the final frame, this reads inputs, handles focusing, and is responsible for calling the rendering
@@ -352,12 +339,16 @@ namespace SimpleUI{
     
     public:
     UI(Scene& first_scene, GFXcanvas16& framebuffer);
-    void addScene(Scene& scene);
-    void focusScene(Scene& scene);
-    void render();
-    void focusDirection(unsigned int direction, FocusingAlgorithm alg);
+    void AddScene(Scene& scene);
+    void FocusScene(Scene* scene);
+    inline const Scene* getActiveScene() const { return focus.activeScene; }
+    void Render();
+    void FocusDirection(unsigned int direction, FocusingAlgorithm alg);
+    void FocusDirection(Direction direction, FocusingAlgorithm alg);
+    void Back();
+    void Click();
     inline bool isFocusingFree() const { return !m_focusing_busy; }
-    UIElement* getFocused() const { return focus.focusedScene->getElementByUUID(focus.focusedElementID); }
+    inline UIElement* getFocused() const { return focus.activeScene->getElementByUUID(focus.focusedElementID); }
     
     #if PERFORMANCE_PROFILING
     void printPerfStats();
@@ -369,6 +360,7 @@ namespace SimpleUI{
     
     
     private:
+    void m_focusDir(unsigned int direction, FocusingAlgorithm alg);
     void m_updateFocus();
     bool m_focusing_busy = false; //You could see this as sort of a "mutex" to prevent multiple focuses from happening in the same cycle, which could break a UI
   };

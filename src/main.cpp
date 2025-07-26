@@ -6,6 +6,7 @@
 #include <images/nicerlandscape.h>
 #include <SimpleUI.h>
 #include <HardwareAid.h>
+#include <Animation.h>
 
 #define SDA 21
 #define SCL 22
@@ -39,9 +40,9 @@ Texture largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_l
 Texture smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
 
-AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  true, FocusStyle::Animation);
-AnimatedApp settings(smallSettings, largeSettings,{25, 32},  true, FocusStyle::Animation);
-AnimatedApp gallery (smallGallery , largeGallery, {103, 32}, true, FocusStyle::Animation);
+AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  80U, true);
+AnimatedApp settings(smallSettings, largeSettings,{25, 32},  80U, true);
+AnimatedApp gallery (smallGallery , largeGallery, {103, 32}, 80U, true);
 
 Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5},16, 16, 0xFFFF);
 Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5},16, 16, 0xFFFF);
@@ -49,8 +50,10 @@ Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5},16, 16, 0xFFFF);
 
 std::vector<UIElement*> elements = {&play, &settings, &gallery};
 std::vector<UIElement*> testing = {&check1, &check2, &check3};
-Scene home(elements, play);
-Scene test(testing, check1);
+std::vector<UIElement*> empty = {};
+Scene home(elements, &play);
+//Scene test(testing, check1);
+Scene test(empty, nullptr);
 UI ui(home, canvas);
 //--------------------------UI SETUP-----------------------------//
 
@@ -84,11 +87,11 @@ void handleComms( void *pvParameters){
       }
       else if (input == "debugui")
       {
-        UIElement *obj = ui.focus.focusedScene->elements.at(ui.focus.focusedElementID);
+        UIElement *obj = ui.focus.activeScene->elements.at(ui.focus.focusedElementID);
         Serial.printf("ID: %s\n", ui.focus.focusedElementID.c_str());
-        Serial.printf("isAtStart: %s\n", obj->anim.getStart() ? "true" : "false");
-        Serial.printf("isDone: %s\n", obj->anim.getDone() ? "true" : "false");
-        Serial.printf("isEnabled: %s\n", obj->anim.getIsEnabled() ? "true" : "false");
+        //Serial.printf("isAtStart: %s\n", obj->anim.getStart() ? "true" : "false");
+        //Serial.printf("isDone: %s\n", obj->anim.getDone() ? "true" : "false");
+        //Serial.printf("isEnabled: %s\n", obj->anim.getIsEnabled() ? "true" : "false");
         Serial.printf("Reverse: %s\n", obj->anim.getDirection() ? "true" : "false");
         Serial.printf("Draw: %s\n", obj->draw ? "true" : "false");
         if(obj->type == ElementType::UIElement)
@@ -108,32 +111,35 @@ void handleComms( void *pvParameters){
           Serial.println("Performance profiling is turned off!");
         #endif
       }
-      else if (input == "uintsize")
+      else if (input == "back")
       {
-        Serial.println(sizeof(unsigned long));
+        ui.Back();
       }
     }
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
+Animation myAnimation(118.0f, 0.0f, 2500U, Interpolation::Sinusoidal);
 
 void loadTest(){
-  ui.focusScene(test);
+  ui.FocusScene(&test);
+  myAnimation.Reset();
+  myAnimation.Start();
 }
 
 void setup() {
   setupButtons(buttons);
   pinMode(BACKLIGHT, OUTPUT);
-  analogWrite(BACKLIGHT, 128);
+  analogWrite(BACKLIGHT, 50);
   Serial.begin(115200);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
   tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
   tft.fillScreen(ST7735_BLACK);
-  #if defined(ESP32)
+
   xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
-  #endif
+
   play.focus_outline.border_distance = 2;
   settings.focus_outline.border_distance = 2;
   gallery.focus_outline.border_distance = 2;
@@ -157,8 +163,9 @@ void setup() {
   check1.focus_outline.radius = 7;
   check2.focus_outline.radius = 7;
   check3.focus_outline.radius = 7;
-  ui.addScene(test);
+  ui.AddScene(test);
   play.bind(std::move(loadTest));
+  test.addParents({&home});
 }
 
 //-------------BEFORE LOOP----------------//
@@ -216,19 +223,25 @@ void loop() {
     updateButtons(buttons);  //Update button states for every button
     
     if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.focusDirection(RIGHT, FocusingAlgorithm::Cone);
+      ui.FocusDirection(Direction::Right, FocusingAlgorithm::Cone);
     }
     if (button2.clickedOnce&& !button1.clickedOnce ) {
       
-      ui.focusDirection(LEFT, FocusingAlgorithm::Cone);
+      ui.FocusDirection(Direction::Left, FocusingAlgorithm::Cone);
     }
 
     if(button3.clickedOnce){
-      ui.getFocused()->click();
+      ui.Click();
     }
     
+    
+    
+    if (ui.getActiveScene() == &test){
+      canvas.fillRect(int(myAnimation.getProgress()), 0, 10, 10, 0xffff);
+      myAnimation.Update();
+    }
     calcStart = micros();
-    ui.render();
+    ui.Render();
     calculationsTime = micros() - calcStart;
 
     computeTime(render_frametime);

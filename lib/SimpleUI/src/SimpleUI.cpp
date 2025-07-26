@@ -1,5 +1,4 @@
 #include "SimpleUI.h"
-#include "UUIDbuddy.h"
 
 namespace SimpleUI{
 //--------------------Cone STRUCT---------------------------------------------------------------//
@@ -15,15 +14,9 @@ namespace SimpleUI{
   Cone::Cone(unsigned int bisector, unsigned int radius, unsigned int aperture, unsigned int aperture_step, unsigned int rad_step)
       :bisector(bisector), radius(radius), aperture(aperture), aperture_step(aperture_step), rad_step(rad_step){}
 
-  /*!
-      @brief Represent a 2D point with integer coordinates.
-      @param    x   X coordinate of the point
-      @param    y   Y coordinate of the point
-  */
-  Point::Point(int posx, int posy) : x(posx), y(posy){}
+
 //--------------------FOCUS STRUCT---------------------------------------------------------------//
 
-  Focus::Focus(std::string ele):focusedElementID(ele){}
 
   /*!
       @brief Focus an object by its UUID
@@ -37,11 +30,10 @@ namespace SimpleUI{
   //This function needs to be called at the end of a cycle, which updates the previous focus id to the current one
   void Focus::update(){
       previousElementID = focusedElementID;
-      isFirstBoot = false;
     }
 
-  //!@return A boolean that when true, means that the focus has changed in the last cycle
-  bool Focus::hasChanged(){
+  //!@return A boolean that when true, means that the focus has changed in the current cycle
+  bool Focus::hasChanged() const {
       return (previousElementID != focusedElementID);
     }
 
@@ -61,118 +53,15 @@ namespace SimpleUI{
       return (focusedElementID == obj->getId());
     }
 
-//--------------------ANIMATOR CLASS---------------------------------------------------------------//
-  Animator::Animator(float i, float f, unsigned int d){  //Basic constructor
-      duration = d*1000;
-      initial = i;
-      final = f;
-      progress = initial;
-    }
-
-  void Animator::update(){
-      if(reverse){
-        //Magnetic attachment to initial value and setting isAtStart
-          
-          if (fabs(progress-final)<=EPSILON){
-            progress = final;
-            isAtStart =true;
-          }
-        }else{
-          if (fabs(progress-initial)<=EPSILON){
-            progress = initial;
-            isAtStart =true;
-          }
-        }
-
-      //If the animation is active, the update logic runs
-      if (enable){
-        now = micros();
-        elapsed = std::clamp(now-currentTime, 0U, duration);
-
-        //Here I add anything that has to run when the animation is in its done state
-        if(isDone){
-          //Breathing feature
-          if(breathing){
-            if(looping){
-              invert();
-              bounce_done = false;
-            } else if (!bounce_done){
-              //invert();
-              //isDone=false;
-              resetAnim();
-              reverse = !reverse;
-              bounce_done = true;
-            }
-          }
-          //Restarts the animation if the looping condition is met
-          if(looping){
-            resetAnim();
-          }
-        }
-
-        //Interpolation
-        else{
-          if (elapsed<duration){
-            progress = std::clamp(Fmap((reverse) ? duration-elapsed : elapsed, 0, duration, initial, final), initial, final);
-          } else {
-            isDone = true;
-            progress = (reverse) ? initial : final;
-          }
-          isAtStart = false;
-        }
-      }
-    }
-
-
-  void Animator::setReverse(bool rev){
-      reverse = rev;
-      progress = (progress==initial&&reverse) ? final : progress;
-    }
-
-  void Animator::stop(){
-      update();
-      enable = false;
-    }
-
-  void Animator::switchState(){
-      if (!enable){
-        currentTime = micros()-elapsed;
-      }else{update();}
-      enable = !enable;
-    }
-
-  void Animator::start(){
-      enable = true;
-      currentTime = micros()-elapsed;
-    }
-    
-  void Animator::defaultModifiers(){
-      looping = false;
-      reverse = false;
-      breathing = false;
-      bounce_done = false;
-    }
-
-  void Animator::resetAnim(){
-      progress = (reverse) ? final : initial;
-      currentTime = micros();
-      isDone = false;
-      isAtStart = true;
-    }
-
-  void Animator::invert(){ 
-      reverse = !reverse;
-      elapsed = duration-elapsed;
-      currentTime = now-elapsed;
-      now = currentTime;
-    }
+  void Focus::focusScene(Scene* scene){
+    previousScene = activeScene;
+    activeScene = scene;
+    focus(scene->primaryElementID);
+  }
 
 //--------------------UIElement CLASS---------------------------------------------------------------//
 
-  UIElement::UIElement(unsigned int w, unsigned int h, Point pos, ElementType element, FocusStyle style) 
-  : type(element), m_width(w), m_height(h), m_position(pos), focus_style(style), m_UUID(UUIDbuddy::generateUUID()){}
-
-  Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h) const {
+  Point UIElement::centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h){
         unsigned int new_x = static_cast<unsigned int>(static_cast<float>(x_pos)-(static_cast<float>(w)*0.5f));
         unsigned int new_y = static_cast<unsigned int>(static_cast<float>(y_pos)-(static_cast<float>(h)*0.5f));
         return Point(new_x, new_y);
@@ -241,7 +130,7 @@ namespace SimpleUI{
   void UIImage::render(){
     INSTRUMENTATE(m_parent_ui)
     drawFocusOutline();
-    anim.update();
+    anim.Update();
     
 
     const float m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
@@ -257,102 +146,81 @@ namespace SimpleUI{
   }
 
 //--------------------AnimatedApp CLASS---------------------------------------------------------------//
-
+  
   void AnimatedApp::m_computeAnimation(){
     INSTRUMENTATE(m_parent_ui)
-    if (m_parent_ui->focus.hasChanged() || (m_parent_ui->focus.isFirstBoot && isFocused()))
-    {
-      if(isFocused()){  
-      //If the element is being focused
+    switch(anim.getState()){
 
-        if(isAnimating() && anim.getDirection()){
-          anim.invert();                         // If it's mid closing-animation, invert it
-        }
-        if(getActive()==m_unselected && anim.getStart())
-        { //If it's showing the small img and hasn't started
-
-          anim.start();
-        }
-      }
-      else{ //Focus has changed but the element isn't focused
-        if(getActive()==m_selected && anim.getDone() && !anim.getDirection())
+      case AnimState::Start:
+      {
+        if (isFocused())
         {
-          anim.setFinal(m_ratio);
+          if (m_showing==m_unselected) 
+            anim.Resume();
+        }
+        else if (m_parent_ui->focus.hasChanged() && m_showing == m_selected)
+        {
           m_showing = m_unselected;
-          anim.resetAnim();
-          anim.setReverse(true);
+          anim = Animation(m_ratio, 1.0f, m_duration);
+          anim.Start();
         }
-        if(isAnimating() && !anim.getDirection()){
-          anim.invert();                          // If it's mid opening-animation, invert it
-        }
-      }
-    }
-    else{
-      if (getActive()==m_unselected && anim.getDone()){
-        if (!anim.getDirection()){
-          //Since we animated from a small image to a larger image, setting final to 1 automatically clamps it to 1
-          anim.setFinal(1); 
-          m_showing = m_selected;
-        }
-        else //This branch however, only runs on the falling part of the animation
-        {
-          //After the sum of all the conditions, we know that the animation has finished reversing to the smaller image
-          anim.setFinal(m_ratio);
-          anim.setReverse(false);  //Make sure the animation goes in the right direction when it is focused again
-          anim.resetAnim();
-          anim.stop();   
-        }
+        break;
       }
       
-      if(!isFocused() && !isAnimating() && m_showing == m_selected){
-        anim.setFinal(m_ratio);
-        m_showing = m_unselected;
-        anim.resetAnim();
-        anim.setReverse(true);
+      case AnimState::Running:
+      {
+        if(m_parent_ui->focus.hasChanged())
+        {
+          if(anim.getDirection() && !isFocused())
+            anim.Flip();
+          else if(!anim.getDirection() && isFocused())
+            anim.Flip();
+        }
+        break;
       }
-      if (isFocused() && anim.getStart() && !anim.getIsEnabled() && m_showing == m_unselected){
-        anim.start();
+
+      case AnimState::Finished:{
+        if ( m_showing == m_unselected)
+        {
+          if (anim.getDirection())
+          {
+            m_showing = m_selected;
+            anim.Reset();
+            anim.Pause();
+          }
+          else {
+            anim = Animation(1.0f, m_ratio, m_duration);
+          }
+        }
+        break;
       }
+
     }
   }
 
-  void AnimatedApp::render(){
-    INSTRUMENTATE(m_parent_ui)
-    anim.update();
-    if (focus_style == FocusStyle::Animation)
-      m_computeAnimation();
+void AnimatedApp::render(){
+  INSTRUMENTATE(m_parent_ui)
+    anim.Update();
+    m_computeAnimation();
   
     const float scale_fac = anim.getProgress();
-    Texture drawing_image = scale_fac != 1 ? scale(*m_showing, scale_fac) : *m_showing;
-    Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+    const Texture drawing_image = scale(*m_showing, scale_fac);
+    const Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+
+    
     if(drawing_image.data.colorspace == PixelType::Mono){
       m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
     }
     else{
       m_parent_ui->buffer->drawRGBBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.rgb565, drawing_image.width, drawing_image.height);
     }
-
   }
 
 //--------------------Checkbox CLASS---------------------------------------------------------------//
 
 
-  /*!
-      @brief Create a checkbox element.
-      @param style        External outline
-      @param pos          Top left corner coordinates
-      @param width        Total width in pixels
-      @param height       Total height in pixels
-      @param fillcolor    RGB565 color of the inside fill
-      @param isCentered   Is the element centered around the provided coordinates?
-      @param focus_style  What method is used to signal a focus
-  */
-  Checkbox::Checkbox(Outline style, Point pos, unsigned int width, unsigned int height, uint16_t fillColor,bool isCentered, FocusStyle focus_style)
-      :UIElement(width, height, pos, ElementType::Checkbox, focus_style), outline(style), selection_color(fillColor){
-        centered = isCentered;
-        focus_outline.border_distance=0U;
-        outline.radius = std::clamp(outline.radius, 0U, static_cast<unsigned int>((width >= height ? height : width)*0.5f));
-      }
+  
+
 
   void Checkbox::m_drawCheckboxOutline() const {
     INSTRUMENTATE(m_parent_ui)
@@ -408,11 +276,16 @@ namespace SimpleUI{
 
 //--------------------Scene STRUCT---------------------------------------------------------------//
 
-  Scene::Scene(std::vector<UIElement*> elementGroup, UIElement& first_focus){
+  Scene::Scene(std::vector<UIElement*> elementGroup, UIElement* first_focus){
+    if(elementGroup.empty()){
+      elements = {};
+    }
+    else{
       for(int i = 0; i<elementGroup.size(); i++){
         elements.insert({elementGroup[i]->getId(),elementGroup[i]});
       }
-      primaryElementID = first_focus.getId();
+    }
+      primaryElementID = first_focus ? first_focus->getId() : "";
     }
 
   void Scene::renderScene() const {
@@ -427,57 +300,97 @@ namespace SimpleUI{
     }
 
   UIElement* Scene::getElementByUUID(std::string UUID) const {
-    return elements.at(UUID);
+    if(UUID != "")
+      return elements.at(UUID);
+    else
+      return nullptr;
+  }
+
+  void Scene::addParents(std::initializer_list<Scene*> scenes){
+    for(const auto scene : scenes){
+      parents.push_back(scene);
+    }
   }
 
 //--------------------UI CLASS---------------------------------------------------------------//
 
-  UI::UI(Scene& first_scene, GFXcanvas16& framebuffer)
+  UI::UI(Scene& first_scene, GFXcanvas16& framebuffer) : focus(Focus(first_scene.primaryElementID)), buffer(&framebuffer)
   {
-    focus = Focus(first_scene.primaryElementID);
-    buffer = &framebuffer;
-    addScene(first_scene);
-    focusScene(first_scene);
+    AddScene(first_scene);
+    focus.focusScene(&first_scene);
   }
 
-  void UI::addScene(Scene& scene){
+  void UI::AddScene(Scene& scene){
       scenes.push_back(&scene);                 //KEEP IN MIND "REALLOCATES"
       for(const auto&[id, element] : scene.elements){
         element->setUiListener(this);
       }
     }
 
-  void UI::focusScene(Scene& scene){
-      focus.focusedScene = &scene;
-      focus.focusedElementID = focus.focusedScene->primaryElementID;
+  void UI::FocusScene(Scene* scene){
+      focus.focusScene(scene);
     }
 
+  void UI::Back(){
+    if (focus.previousScene){
+      Serial.println("Back!");
+      if ( !(focus.activeScene->parents.empty()) ) {
+        focus.focusScene(focus.previousScene);
+      }
+    }else{
+      return;
+    }
+  }
+
+  void UI::Click(){
+    UIElement* focused = getFocused();
+    if(focused)
+      focused->click();
+    else
+      return;
+  }
 
 
   /// @brief Focus the closest object in any direction
   /// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
   /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
-  void UI::focusDirection(unsigned int direction, FocusingAlgorithm alg){
+  void UI::FocusDirection(unsigned int direction, FocusingAlgorithm alg){
     INSTRUMENTATE(this)
+    m_focusDir(direction, alg);
+  }
+
+  /// @brief Focus the closest object in any direction
+  /// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
+  /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
+  void UI::FocusDirection(Direction direction, FocusingAlgorithm alg){
+    INSTRUMENTATE(this)
+    m_focusDir(static_cast<unsigned int>(direction), alg);
+  }
+
+  void UI::Render(){
+    focus.activeScene->renderScene();
+    m_updateFocus();
+  }
+
+  void UI::m_focusDir(unsigned int direction, FocusingAlgorithm alg){
     if(isFocusingFree()){
       m_focusing_busy = true;
-      UIElement* next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.focusedScene, focus.focusedScene->getElementByUUID(focus.focusedElementID));
-      if(next_element){
-          focus.focus(next_element->getId());
-          focus.focusedElementID = next_element->getId();
-      }
+
+      UIElement* next_element;
+      if (focus.activeScene->elements.empty())
+        return;
+      else
+        next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.activeScene, focus.activeScene->getElementByUUID(focus.focusedElementID));
+
+      focus.focus(next_element->getId());
+      focus.focusedElementID = next_element->getId();
+
     }
   }
 
   void UI::m_updateFocus(){
     focus.update();
     m_focusing_busy = false;
-  }
-
-
-  void UI::render(){
-    focus.focusedScene->renderScene();
-    m_updateFocus();
   }
 
   #if PERFORMANCE_PROFILING
@@ -494,7 +407,7 @@ namespace SimpleUI{
     }
   }
   #endif
-  
+
 //--------------------UiUtils NAMESPACE---------------------------------------------------------------//
 
   namespace UiUtils{
@@ -520,6 +433,10 @@ namespace SimpleUI{
       }
 
     UIElement* SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused){
+        if (scene->elements.empty()){
+          Serial.println("DEBUG");
+          return nullptr;
+        }
         INSTRUMENTATE(focused->getParentUI())
         if (alg == FocusingAlgorithm::Linear)
         {
