@@ -47,6 +47,10 @@ namespace SimpleUI{
         inline void setLoop(const bool loop){ m_loop = loop; }
         void setFunc(Interpolation function);
 
+        bool operator==(const AnimState state){
+            return getState() == state;
+        }
+
         static inline float lerp(const float a, const float b, const float f) { return (a * (1.0 - f)) + (b * f); }
 
         static inline float normalize(const float x, const float min, const float max){ return (x - min) / (max - min); }
@@ -54,7 +58,7 @@ namespace SimpleUI{
         static inline float map(const float x, const float in_min, const float in_max, const float out_min, const float out_max){ return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min; }
     
         private:
-        static constexpr float EPSILON = 0.000005;
+        static constexpr float EPSILON = 0.00005;
         Interpolation m_interpolation;
         AnimState m_state;
         float m_start, m_end, m_progress, m_T;

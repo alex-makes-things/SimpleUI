@@ -34,9 +34,9 @@ namespace SimpleUI{
     }
 
     const AnimState Animation::getState() const {
-        if (fabs(m_progress - m_end) <= EPSILON)
+        if (fabs(m_progress - m_end) <= EPSILON || m_state == AnimState::Finished)
             return AnimState::Finished;
-        else if (fabs(m_progress - m_start) <= EPSILON)
+        else if (fabs(m_progress - m_start) <= EPSILON || m_state == AnimState::Start)
             return AnimState::Start;
         else
             return AnimState::Running;
@@ -46,7 +46,6 @@ namespace SimpleUI{
     void Animation::Update(){
         
         if (m_enable) {
-
             if ( m_state != AnimState::Finished) 
             {
                 m_now = micros();
@@ -61,16 +60,14 @@ namespace SimpleUI{
 
                 m_progress = lerp(m_start, m_end, m_T);
 
+
                 m_state = m_elapsed >= m_length ? AnimState::Finished : AnimState::Running;
             }
-
             else{
                 if (m_loop)
                     Reset();
             }
-
         }
-
     }
 
 }

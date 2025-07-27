@@ -40,13 +40,13 @@ Texture largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_l
 Texture smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
 
-AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  80U, true);
-AnimatedApp settings(smallSettings, largeSettings,{25, 32},  80U, true);
-AnimatedApp gallery (smallGallery , largeGallery, {103, 32}, 80U, true);
+AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+AnimatedApp settings(smallSettings, largeSettings,{25, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+AnimatedApp gallery (smallGallery , largeGallery, {103, 32}, true, 80U, Interpolation::Sinusoidal, Constraint::Center);
 
-Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5},16, 16, 0xFFFF);
-Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5},16, 16, 0xFFFF);
-Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5},16, 16, 0xFFFF);
+Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5}, 16, 16, 0xFFFF);
+Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5}, 16, 16, 0xFFFF);
+Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5}, 16, 16, 0xFFFF);
 
 std::vector<UIElement*> elements = {&play, &settings, &gallery};
 std::vector<UIElement*> testing = {&check1, &check2, &check3};
@@ -87,11 +87,13 @@ void handleComms( void *pvParameters){
       }
       else if (input == "debugui")
       {
-        UIElement *obj = ui.focus.activeScene->elements.at(ui.focus.focusedElementID);
+        UIElement *obj = ui.getFocused();
         Serial.printf("ID: %s\n", ui.focus.focusedElementID.c_str());
-        //Serial.printf("isAtStart: %s\n", obj->anim.getStart() ? "true" : "false");
-        //Serial.printf("isDone: %s\n", obj->anim.getDone() ? "true" : "false");
-        //Serial.printf("isEnabled: %s\n", obj->anim.getIsEnabled() ? "true" : "false");
+        switch(obj->anim.getState()){
+          case AnimState::Start: Serial.println("AnimState: Start"); break;
+          case AnimState::Running: Serial.println("AnimState: Running"); break;
+          case AnimState::Finished: Serial.println("AnimState: Finished"); break;
+        }
         Serial.printf("Reverse: %s\n", obj->anim.getDirection() ? "true" : "false");
         Serial.printf("Draw: %s\n", obj->draw ? "true" : "false");
         if(obj->type == ElementType::UIElement)
@@ -120,7 +122,7 @@ void handleComms( void *pvParameters){
   }
 }
 
-Animation myAnimation(118.0f, 0.0f, 2500U, Interpolation::Sinusoidal);
+Animation myAnimation(118.0f, 0.0f, 1000U, Interpolation::Sinusoidal);
 
 void loadTest(){
   ui.FocusScene(&test);
@@ -166,16 +168,19 @@ void setup() {
   ui.AddScene(test);
   play.bind(std::move(loadTest));
   test.addParents({&home});
+
+  myAnimation.setLoop(true);
 }
 
 //-------------BEFORE LOOP----------------//
-uint32_t start = micros(), calcStart = micros();
+uint32_t calcStart = micros(), lastFrame = micros(), deltaTime = 0;
 //-------------BEFORE LOOP----------------//
 
 
 //-------------SETTINGS----------------//
 bool render_frametime = true;
-unsigned int frameTime=0;
+int frameWait=0;
+unsigned int fpsTarget = FPS120;
 unsigned int calculationsTime=0;
 uint16_t debugColor = hex("#ff8e00");
 
@@ -187,12 +192,15 @@ void framerate(bool render){
     canvas.setTextSize(2);
     canvas.setTextColor(ST7735_GREEN);
     canvas.setTextWrap(false);
-    canvas.print(frameTime);
+    canvas.print(1000000/deltaTime);
+    canvas.setCursor(canvas.getCursorX(),57);
+    canvas.setTextSize(1);
+    canvas.print("FPS");
   }
 }
 void computeTime(bool render){
   if(render){
-    canvas.setCursor(54,50);
+    canvas.setCursor(60,50);
     canvas.setTextSize(2);
     canvas.setTextColor(ST7735_RED);
     canvas.setTextWrap(false);
@@ -218,28 +226,33 @@ void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
 
 
 void loop() {
+  deltaTime = micros() - lastFrame;
+
+  updateButtons(buttons);  //Update button states for every button
+  
+  if (button1.clickedOnce && !button2.clickedOnce ) {
+    ui.FocusDirection(Direction::Right, FocusingAlgorithm::Cone);
+  }
+  if (button2.clickedOnce&& !button1.clickedOnce ) {
+    
+    ui.FocusDirection(Direction::Left, FocusingAlgorithm::Cone);
+  }
+  
+  if(button3.clickedOnce){
+    ui.Click();
+  }
+
+  if (deltaTime >= fpsTarget){
+    
     canvas.fillScreen(0x0000); //Fill the background with a black frame
-
-    updateButtons(buttons);  //Update button states for every button
-    
-    if (button1.clickedOnce && !button2.clickedOnce ) {
-      ui.FocusDirection(Direction::Right, FocusingAlgorithm::Cone);
-    }
-    if (button2.clickedOnce&& !button1.clickedOnce ) {
-      
-      ui.FocusDirection(Direction::Left, FocusingAlgorithm::Cone);
-    }
-
-    if(button3.clickedOnce){
-      ui.Click();
-    }
-    
-    
     
     if (ui.getActiveScene() == &test){
       canvas.fillRect(int(myAnimation.getProgress()), 0, 10, 10, 0xffff);
       myAnimation.Update();
+      if(myAnimation == AnimState::Finished)
+        myAnimation.Flip();
     }
+
     calcStart = micros();
     ui.Render();
     calculationsTime = micros() - calcStart;
@@ -249,9 +262,9 @@ void loop() {
 
     fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
 
-    
-  //TEMPORAL VARIABLES AND FUNCTIONS
+    //TEMPORAL VARIABLES AND FUNCTIONS
     rememberButtons(buttons);
-    frameTime = micros()-start;
-    start = micros();
+
+    lastFrame = micros();
+  }
 }

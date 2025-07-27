@@ -118,11 +118,31 @@ namespace SimpleUI{
   }
 
   Point UIElement::getDrawPoint() const {
-    return centered ? centerToCornerPos(m_position.x, m_position.y, m_width, m_height) : m_position;
+    return getConstraintedPos();
   }
 
   Point UIElement::getCenterPoint() const {
-    return centered ? m_position : UiUtils::centerPos(m_position.x, m_position.y, m_width, m_height);
+    return UiUtils::centerPos(m_position.x, m_position.y, m_width, m_height);
+  }
+
+  Point UIElement::getConstraintedPos() const {
+    int widthDiff = m_width - m_s_width;
+    int heightDiff = m_height - m_s_height;
+    int widthDiff_2 = static_cast<int>(widthDiff * 0.5);
+    int heightDiff_2 = static_cast<int>(heightDiff * 0.5);
+    Point tempPoint = m_position;
+    switch (scale_constraint){
+      case Constraint::TopLeft:     return Point( tempPoint.x, tempPoint.y );
+      case Constraint::Top:         return Point( tempPoint.x + widthDiff_2,  tempPoint.y);
+      case Constraint::TopRight:    return Point( tempPoint.x + widthDiff,  tempPoint.y);
+      case Constraint::Left:        return Point( tempPoint.x,  tempPoint.y + heightDiff_2);
+      case Constraint::Center:      return Point( tempPoint.x + widthDiff_2,  tempPoint.y + heightDiff_2);
+      case Constraint::Right:       return Point( tempPoint.x + widthDiff,  tempPoint.y + heightDiff_2);
+      case Constraint::BottomLeft:  return Point( tempPoint.x,  tempPoint.y + heightDiff);
+      case Constraint::Bottom:      return Point( tempPoint.x + widthDiff_2,  tempPoint.y + heightDiff);
+      case Constraint::BottomRight: return Point( tempPoint.x + heightDiff,  tempPoint.y + heightDiff);
+    }
+    return tempPoint;
   }
 
 //--------------------UIImage CLASS---------------------------------------------------------------//
@@ -131,11 +151,13 @@ namespace SimpleUI{
     INSTRUMENTATE(m_parent_ui)
     drawFocusOutline();
     anim.Update();
-    
+  
+    const float scale_fac = anim.getProgress();
+    const Texture drawing_image = scale(*m_body, scale_fac);
+    m_s_height = drawing_image.height;
+    m_s_width = drawing_image.width;
+    const Point drawing_pos = getConstraintedPos();
 
-    const float m_scale_fac = (m_overrideAnimationScaling) ? m_scale_fac : anim.getProgress();
-    Texture drawing_image = m_scale_fac != 1 ? scale(*m_body, m_scale_fac) : *m_body;
-    Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
     if(drawing_image.data.colorspace == PixelType::Mono){
       m_parent_ui->buffer->drawBitmap(drawing_pos.x, drawing_pos.y, drawing_image.data.mono, drawing_image.width, drawing_image.height, m_mono_color);
     }
@@ -151,24 +173,21 @@ namespace SimpleUI{
     INSTRUMENTATE(m_parent_ui)
     switch(anim.getState()){
 
-      case AnimState::Start:
-      {
+      case AnimState::Start:{
         if (isFocused())
         {
           if (m_showing==m_unselected) 
             anim.Resume();
         }
         else if (m_parent_ui->focus.hasChanged() && m_showing == m_selected)
-        {
+        { //If the element has just been unfocused and has previously completed the focusing animation, start the unfocusing
           m_showing = m_unselected;
-          anim = Animation(m_ratio, 1.0f, m_duration);
+          anim = Animation(m_ratio, 1.0f, m_duration, m_func);
           anim.Start();
         }
         break;
       }
-      
-      case AnimState::Running:
-      {
+      case AnimState::Running:{ //Flip the animation when interacting to create a smooth ascend/descend mid-animation
         if(m_parent_ui->focus.hasChanged())
         {
           if(anim.getDirection() && !isFocused())
@@ -178,23 +197,29 @@ namespace SimpleUI{
         }
         break;
       }
-
       case AnimState::Finished:{
         if ( m_showing == m_unselected)
         {
           if (anim.getDirection())
           {
-            m_showing = m_selected;
-            anim.Reset();
-            anim.Pause();
+            if (isFocused())
+            { //Set the current progress to 1 for correct scaling of focused icon
+              m_showing = m_selected;
+              anim.Reset();
+              anim.Pause();
+            }
+            else
+            { //Fixes bug that causes the unfocused icon to stay big while it isn't focused
+              anim = Animation(m_ratio, 1.0f, m_duration, m_func);
+              anim.Start();
+            }
           }
-          else {
-            anim = Animation(1.0f, m_ratio, m_duration);
+          else { //Reset the animation for it to be resumed with the correct parameters
+            anim = Animation(1.0f, m_ratio, m_duration, m_func);
           }
         }
         break;
       }
-
     }
   }
 
@@ -205,7 +230,9 @@ void AnimatedApp::render(){
   
     const float scale_fac = anim.getProgress();
     const Texture drawing_image = scale(*m_showing, scale_fac);
-    const Point drawing_pos = centered ? centerToCornerPos(m_position.x, m_position.y, drawing_image.width, drawing_image.height) : m_position;
+    m_s_height = drawing_image.height;
+    m_s_width = drawing_image.width;
+    const Point drawing_pos = getConstraintedPos();
 
     
     if(drawing_image.data.colorspace == PixelType::Mono){
@@ -217,10 +244,6 @@ void AnimatedApp::render(){
   }
 
 //--------------------Checkbox CLASS---------------------------------------------------------------//
-
-
-  
-
 
   void Checkbox::m_drawCheckboxOutline() const {
     INSTRUMENTATE(m_parent_ui)
@@ -382,9 +405,10 @@ void AnimatedApp::render(){
       else
         next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.activeScene, focus.activeScene->getElementByUUID(focus.focusedElementID));
 
-      focus.focus(next_element->getId());
-      focus.focusedElementID = next_element->getId();
-
+      if (next_element){
+        focus.focus(next_element->getId());
+        focus.focusedElementID = next_element->getId();
+      }
     }
   }
 
