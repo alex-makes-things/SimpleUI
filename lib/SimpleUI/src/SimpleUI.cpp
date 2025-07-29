@@ -54,9 +54,11 @@ namespace SimpleUI{
     }
 
   void Focus::focusScene(Scene* scene){
-    previousScene = activeScene;
-    activeScene = scene;
-    focus(scene->primaryElementID);
+    if (scene){
+      previousScene = activeScene;
+      activeScene = scene;
+      focus(scene->primaryElementID);
+    }
   }
 
 //--------------------UIElement CLASS---------------------------------------------------------------//
@@ -71,26 +73,27 @@ namespace SimpleUI{
     return m_parent_ui->focus.focusedElementID==m_UUID;
   }
 
-  void UIElement::drawFocusOutline() const {
+  void UIElement::drawFocusOutline(const Outline& outline) const {
     INSTRUMENTATE(m_parent_ui)
     if (focus_style == FocusStyle::Outline && isFocused()) {
+      Outline draw_outline = custom_focus_outline ? focus_outline : outline;
 
       Point rect_drawing_pos = getDrawPoint();
-      rect_drawing_pos -= (focus_outline.border_distance + 1);
-      int16_t draw_width = m_width + focus_outline.border_distance*2 +2;
-      int16_t draw_height = m_height + focus_outline.border_distance*2 +2;
+      rect_drawing_pos -= (draw_outline.border_distance + 1);
+      int16_t draw_width = m_width + draw_outline.border_distance*2 +2;
+      int16_t draw_height = m_height + draw_outline.border_distance*2 +2;
 
 
-      if(focus_outline.radius != 0){
-        int16_t draw_radius = focus_outline.radius;
-        for (int i = 0; i < focus_outline.thickness; i++) {
-          m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, focus_outline.color);
+      if(draw_outline.radius != 0){
+        int16_t draw_radius = draw_outline.radius;
+        for (int i = 0; i < draw_outline.thickness; i++) {
+          m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, draw_outline.color);
           if (!(i % 2)){
             int16_t temp_r = draw_radius + 1;
-            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, focus_outline.color);
-            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, focus_outline.color);
-            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, focus_outline.color);
-            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 8, focus_outline.color);
+            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, draw_outline.color);
+            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, draw_outline.color);
+            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, draw_outline.color);
+            m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 8, draw_outline.color);
           }
           
           draw_width += 2;
@@ -101,8 +104,8 @@ namespace SimpleUI{
       }
       else{
 
-        for (int i = 0; i < focus_outline.thickness; i++) {
-          m_parent_ui->buffer->drawRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, focus_outline.color);
+        for (int i = 0; i < draw_outline.thickness; i++) {
+          m_parent_ui->buffer->drawRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_outline.color);
           draw_width += 2;
           draw_height += 2;
           rect_drawing_pos--;
@@ -130,19 +133,18 @@ namespace SimpleUI{
     int heightDiff = m_height - m_s_height;
     int widthDiff_2 = static_cast<int>(widthDiff * 0.5);
     int heightDiff_2 = static_cast<int>(heightDiff * 0.5);
-    Point tempPoint = m_position;
     switch (scale_constraint){
-      case Constraint::TopLeft:     return Point( tempPoint.x, tempPoint.y );
-      case Constraint::Top:         return Point( tempPoint.x + widthDiff_2,  tempPoint.y);
-      case Constraint::TopRight:    return Point( tempPoint.x + widthDiff,  tempPoint.y);
-      case Constraint::Left:        return Point( tempPoint.x,  tempPoint.y + heightDiff_2);
-      case Constraint::Center:      return Point( tempPoint.x + widthDiff_2,  tempPoint.y + heightDiff_2);
-      case Constraint::Right:       return Point( tempPoint.x + widthDiff,  tempPoint.y + heightDiff_2);
-      case Constraint::BottomLeft:  return Point( tempPoint.x,  tempPoint.y + heightDiff);
-      case Constraint::Bottom:      return Point( tempPoint.x + widthDiff_2,  tempPoint.y + heightDiff);
-      case Constraint::BottomRight: return Point( tempPoint.x + heightDiff,  tempPoint.y + heightDiff);
+      case Constraint::TopLeft:     return Point( m_position.x, m_position.y );
+      case Constraint::Top:         return Point( m_position.x + widthDiff_2,  m_position.y);
+      case Constraint::TopRight:    return Point( m_position.x + widthDiff,  m_position.y);
+      case Constraint::Left:        return Point( m_position.x,  m_position.y + heightDiff_2);
+      case Constraint::Center:      return Point( m_position.x + widthDiff_2,  m_position.y + heightDiff_2);
+      case Constraint::Right:       return Point( m_position.x + widthDiff,  m_position.y + heightDiff_2);
+      case Constraint::BottomLeft:  return Point( m_position.x,  m_position.y + heightDiff);
+      case Constraint::Bottom:      return Point( m_position.x + widthDiff_2,  m_position.y + heightDiff);
+      case Constraint::BottomRight: return Point( m_position.x + heightDiff,  m_position.y + heightDiff);
     }
-    return tempPoint;
+    return Point(m_position.x, m_position.y);
   }
 
 //--------------------UIImage CLASS---------------------------------------------------------------//
@@ -299,31 +301,35 @@ void AnimatedApp::render(){
 
 //--------------------Scene STRUCT---------------------------------------------------------------//
 
-  Scene::Scene(std::vector<UIElement*> elementGroup, UIElement* first_focus){
-    if(elementGroup.empty()){
-      elements = {};
-    }
-    else{
-      for(int i = 0; i<elementGroup.size(); i++){
-        elements.insert({elementGroup[i]->getId(),elementGroup[i]});
-      }
-    }
-      primaryElementID = first_focus ? first_focus->getId() : "";
+  Scene::Scene(std::initializer_list<UIElement*> elementGroup, UIElement* first_focus){
+
+    for(const auto elem : elementGroup){
+      elements.insert({elem->getId(),elem});
     }
 
+    primaryElementID = first_focus ? first_focus->getId() : "";
+  }
+
+  
   void Scene::renderScene() const {
+      if(!settings.scriptOnTop)
+        m_script();
+
       for (const auto&[id, element] : elements)
       {
         if(element->draw){
           element->render();
           if(element->isFocused()&&element->focus_style==FocusStyle::Outline)
-            element->drawFocusOutline();
+            element->drawFocusOutline(settings.focus.outline);
         }
       }
+
+      if(settings.scriptOnTop)
+        m_script();
     }
 
   UIElement* Scene::getElementByUUID(std::string UUID) const {
-    if(UUID != "")
+    if(!UUID.empty())
       return elements.at(UUID);
     else
       return nullptr;
@@ -337,15 +343,15 @@ void AnimatedApp::render(){
 
 //--------------------UI CLASS---------------------------------------------------------------//
 
-  UI::UI(Scene& first_scene, GFXcanvas16& framebuffer) : focus(Focus(first_scene.primaryElementID)), buffer(&framebuffer)
+  UI::UI(Scene* first_scene, GFXcanvas16* framebuffer) : focus(Focus(first_scene->primaryElementID)), buffer(framebuffer)
   {
     AddScene(first_scene);
-    focus.focusScene(&first_scene);
+    focus.focusScene(first_scene);
   }
 
-  void UI::AddScene(Scene& scene){
-      scenes.push_back(&scene);                 //KEEP IN MIND "REALLOCATES"
-      for(const auto&[id, element] : scene.elements){
+  void UI::AddScene(Scene* scene){
+      scenes.push_back(scene);                 //KEEP IN MIND "REALLOCATES"
+      for(const auto&[id, element] : scene->elements){
         element->setUiListener(this);
       }
     }
@@ -377,17 +383,17 @@ void AnimatedApp::render(){
   /// @brief Focus the closest object in any direction
   /// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
   /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
-  void UI::FocusDirection(unsigned int direction, FocusingAlgorithm alg){
+  void UI::FocusDirection(unsigned int direction){
     INSTRUMENTATE(this)
-    m_focusDir(direction, alg);
+    m_focusDir(direction, focus.activeScene->settings.focus.algorithm);
   }
 
   /// @brief Focus the closest object in any direction
   /// @param direction The direction in counter clockwise degrees, with its origin being the center of the currently focused element (Right is 0)
   /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
-  void UI::FocusDirection(Direction direction, FocusingAlgorithm alg){
+  void UI::FocusDirection(Direction direction){
     INSTRUMENTATE(this)
-    m_focusDir(static_cast<unsigned int>(direction), alg);
+    m_focusDir(static_cast<unsigned int>(direction), focus.activeScene->settings.focus.algorithm);
   }
 
   void UI::Render(){
@@ -403,7 +409,7 @@ void AnimatedApp::render(){
       if (focus.activeScene->elements.empty())
         return;
       else
-        next_element = UiUtils::SignedDistance(direction, focusingSettings, alg, focus.activeScene, focus.activeScene->getElementByUUID(focus.focusedElementID));
+        next_element = UiUtils::SignedDistance(direction, focus.activeScene, focus.activeScene->getElementByUUID(focus.focusedElementID));
 
       if (next_element){
         focus.focus(next_element->getId());
@@ -456,51 +462,53 @@ void AnimatedApp::render(){
         return Point(new_x, new_y);
       }
 
-    UIElement* SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused){
-        if (scene->elements.empty()){
-          Serial.println("DEBUG");
-          return nullptr;
-        }
-        INSTRUMENTATE(focused->getParentUI())
-        if (alg == FocusingAlgorithm::Linear)
+
+    UIElement* SignedDistance(const unsigned int direction, Scene* scene, UIElement* focused){
+      Scene::SceneSettings::FocusingSettings& settings = scene->settings.focus;
+      INSTRUMENTATE(focused->getParentUI())
+      if (scene->elements.empty()){
+        Serial.println("DEBUG");
+        return nullptr;
+      }
+      if (settings.algorithm == FocusingAlgorithm::Linear)
+      {
+        Ray ray{settings.max_distance, 1, direction};
+        switch (settings.accuracy)
         {
-          Ray ray{settings.max_distance, 1, direction};
-          switch (settings.accuracy)
-          {
+        case Quality::Low:
+          ray.step = 4;
+          break;
+        case Quality::Medium:
+          ray.step = 2;
+          break;
+        case Quality::High:
+          ray.step = 1;
+          break;
+        }
+        return findElementInRay(focused, scene, ray);
+      }
+
+      else  //IF THE METHOD IS CONE
+      {
+        Cone cone(direction, settings.max_distance, 90, 2, 6);
+        switch (settings.accuracy){
           case Quality::Low:
-            ray.step = 4;
+            cone.aperture_step = 3;
+            cone.rad_step = 8;
             break;
           case Quality::Medium:
-            ray.step = 2;
+            cone.aperture_step = 2;
+            cone.rad_step = 6;
             break;
           case Quality::High:
-            ray.step = 1;
+            cone.aperture_step = 1;
+            cone.rad_step = 2;
             break;
           }
-          return findElementInRay(focused, scene, ray);
-        }
+        return findElementInCone(focused, scene, cone);
+      }
 
-        else  //IF THE METHOD IS CONE
-        {
-          Cone cone(direction, settings.max_distance, 90, 2, 6);
-          switch (settings.accuracy){
-            case Quality::Low:
-              cone.aperture_step = 3;
-              cone.rad_step = 8;
-              break;
-            case Quality::Medium:
-              cone.aperture_step = 2;
-              cone.rad_step = 6;
-              break;
-            case Quality::High:
-              cone.aperture_step = 1;
-              cone.rad_step = 2;
-              break;
-            }
-          return findElementInCone(focused, scene, cone);
-        }
-
-        return nullptr;
+      return nullptr;
     }
 
     Point polarToCartesian(const float radius, const float angle){

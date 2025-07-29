@@ -30,31 +30,26 @@ Button button2(25);
 Button button3(27);
 std::vector<Button*> buttons = {&button1, &button2, &button3};
 
+
 Texture playTest(HOME_LARGE_TEST_SIZE, HOME_LARGE_TEST_SIZE, home_large_test);
 Texture smallPlayTest(HOME_SMALL_TEST_SIZE, HOME_SMALL_TEST_SIZE, home_small_test);
-
 Texture largeGallery(HOME_LARGE_GALLERY_SIZE, HOME_LARGE_GALLERY_SIZE, home_large_gallery);
 Texture smallGallery(HOME_SMALL_GALLERY_SIZE, HOME_SMALL_GALLERY_SIZE, home_small_gallery);
-
 Texture largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_large_settings);
 Texture smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
 
-AnimatedApp play    (smallPlayTest, playTest,     {64, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
-AnimatedApp settings(smallSettings, largeSettings,{25, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
-AnimatedApp gallery (smallGallery , largeGallery, {103, 32}, true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+AnimatedApp play    (&smallPlayTest, &playTest,     {64, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+AnimatedApp settings(&smallSettings, &largeSettings,{25, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+AnimatedApp gallery (&smallGallery , &largeGallery, {103, 32}, true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+Scene home({&play, &settings, &gallery}, &play);
 
 Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5}, 16, 16, 0xFFFF);
 Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5}, 16, 16, 0xFFFF);
 Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5}, 16, 16, 0xFFFF);
+Scene test({&check1, &check2, &check3}, &check1);
 
-std::vector<UIElement*> elements = {&play, &settings, &gallery};
-std::vector<UIElement*> testing = {&check1, &check2, &check3};
-std::vector<UIElement*> empty = {};
-Scene home(elements, &play);
-//Scene test(testing, check1);
-Scene test(empty, nullptr);
-UI ui(home, canvas);
+UI ui(&home, &canvas);
 //--------------------------UI SETUP-----------------------------//
 
 TaskHandle_t serialComms;
@@ -96,11 +91,11 @@ void handleComms( void *pvParameters){
         }
         Serial.printf("Reverse: %s\n", obj->anim.getDirection() ? "true" : "false");
         Serial.printf("Draw: %s\n", obj->draw ? "true" : "false");
-        if(obj->type == ElementType::UIElement)
+        if(obj->getType() == ElementType::UIElement)
           Serial.println("Type: UIElement");
-        else if (obj->type == ElementType::UIImage)
+        else if (obj->getType() == ElementType::UIImage)
           Serial.println("Type: UIImage");
-        else if (obj->type == ElementType::Checkbox)
+        else if (obj->getType() == ElementType::Checkbox)
           Serial.println("Type: Checkbox");
         else 
           Serial.println("Type: AnimatedApp");
@@ -122,67 +117,31 @@ void handleComms( void *pvParameters){
   }
 }
 
+
 Animation myAnimation(118.0f, 0.0f, 1000U, Interpolation::Sinusoidal);
-
-void loadTest(){
-  ui.FocusScene(&test);
-  myAnimation.Reset();
-  myAnimation.Start();
-}
-
-void setup() {
-  setupButtons(buttons);
-  pinMode(BACKLIGHT, OUTPUT);
-  analogWrite(BACKLIGHT, 50);
-  Serial.begin(115200);
-  spi.begin(SCL, -1, SDA, -1);
-  tft.initR(INITR_GREENTAB);
-  tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
-  tft.fillScreen(ST7735_BLACK);
-
-  xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
-
-  play.focus_outline.border_distance = 2;
-  settings.focus_outline.border_distance = 2;
-  gallery.focus_outline.border_distance = 2;
-
-  play.focus_outline.radius = 3;
-  settings.focus_outline.radius = 3;
-  gallery.focus_outline.radius = 3;
-
-  play.focus_outline.thickness = 2;
-  settings.focus_outline.thickness = 2;
-  gallery.focus_outline.thickness = 2;
-
-  check1.focus_outline.color = hex("#6b6b6b");
-  check2.focus_outline.color = hex("#6b6b6b");
-  check3.focus_outline.color = hex("#6b6b6b");
-
-  check1.focus_outline.border_distance = 1;
-  check2.focus_outline.border_distance = 1;
-  check3.focus_outline.border_distance = 1;
-
-  check1.focus_outline.radius = 7;
-  check2.focus_outline.radius = 7;
-  check3.focus_outline.radius = 7;
-  ui.AddScene(test);
-  play.bind(std::move(loadTest));
-  test.addParents({&home});
-
-  myAnimation.setLoop(true);
-}
-
-//-------------BEFORE LOOP----------------//
 uint32_t calcStart = micros(), lastFrame = micros(), deltaTime = 0;
-//-------------BEFORE LOOP----------------//
+
 
 
 //-------------SETTINGS----------------//
 bool render_frametime = true;
 int frameWait=0;
-unsigned int fpsTarget = FPS120;
+unsigned int fpsTarget = FPS_UNCAPPED;
 unsigned int calculationsTime=0;
 uint16_t debugColor = hex("#ff8e00");
+
+auto loadTest = [&](){
+  ui.FocusScene(&test);
+  myAnimation.Reset();
+  myAnimation.Start();
+};
+
+auto testSceneScript = [&](){
+  canvas.fillRect(int(myAnimation.getProgress()), 0, 10, 10, ST7735_ORANGE);
+  myAnimation.Update();
+    if(myAnimation == AnimState::Finished)
+      myAnimation.Flip();
+};
 
 //-------------SETTINGS----------------//
 
@@ -207,21 +166,42 @@ void computeTime(bool render){
     canvas.print(calculationsTime);
   }
 }
-/**************************************************************************/
-/*!
-   @brief      A blazingly fast method for drawing an RGB bitmap to the screen
-    @param    x   Top left corner x coordinate
-    @param    y   Top left corner y coordinate
-    @param    bitmap  byte array with monochrome bitmap
-    @param    w   Width of bitmap in pixels
-    @param    h   Height of bitmap in pixels
-*/
-/**************************************************************************/
+void initLCD(){
+  pinMode(BACKLIGHT, OUTPUT);
+  analogWrite(BACKLIGHT, 50);
+  Serial.begin(115200);
+  spi.begin(SCL, -1, SDA, -1);
+  tft.initR(INITR_GREENTAB);
+  tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
+  tft.fillScreen(ST7735_BLACK);
+}
+
 inline __attribute__((always_inline))
-void fastRender(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
+void blit()
 {
-  tft.setAddrWindow(x, y, w, h);
-  tft.writePixels(bitmap, 8192, false);
+  tft.setAddrWindow(0, 0, 128, 64);
+  tft.writePixels(canvas.getBuffer(), 8192, false);
+}
+
+
+void setup() {
+  setupButtons(buttons);
+  initLCD();
+
+  xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
+
+
+  home.settings.focus.outline = Outline(2, 2, 3);
+  test.settings.focus.outline = Outline(1, 1, 7, hex("#6b6b6b"));
+
+
+  ui.AddScene(&test);
+  play.bind(loadTest);
+  test.addParents({&home});
+
+
+  test.Script(testSceneScript, true);
+  myAnimation.setLoop(true);
 }
 
 
@@ -231,11 +211,11 @@ void loop() {
   updateButtons(buttons);  //Update button states for every button
   
   if (button1.clickedOnce && !button2.clickedOnce ) {
-    ui.FocusDirection(Direction::Right, FocusingAlgorithm::Cone);
+    ui.FocusDirection(Direction::Right);
   }
   if (button2.clickedOnce&& !button1.clickedOnce ) {
     
-    ui.FocusDirection(Direction::Left, FocusingAlgorithm::Cone);
+    ui.FocusDirection(Direction::Left);
   }
   
   if(button3.clickedOnce){
@@ -243,15 +223,10 @@ void loop() {
   }
 
   if (deltaTime >= fpsTarget){
+    lastFrame = micros();
     
     canvas.fillScreen(0x0000); //Fill the background with a black frame
     
-    if (ui.getActiveScene() == &test){
-      canvas.fillRect(int(myAnimation.getProgress()), 0, 10, 10, 0xffff);
-      myAnimation.Update();
-      if(myAnimation == AnimState::Finished)
-        myAnimation.Flip();
-    }
 
     calcStart = micros();
     ui.Render();
@@ -260,11 +235,10 @@ void loop() {
     computeTime(render_frametime);
     framerate(render_frametime);  //Render the framerate in the bottom-left corner on top of everything
 
-    fastRender(0,0,canvas.getBuffer(),SCREENWIDTH,SCREENHEIGHT); //RENDER THE FRAME
+    blit(); //RENDER THE FRAME
 
     //TEMPORAL VARIABLES AND FUNCTIONS
     rememberButtons(buttons);
 
-    lastFrame = micros();
   }
 }

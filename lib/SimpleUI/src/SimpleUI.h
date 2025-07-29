@@ -11,12 +11,12 @@
 #define PERFORMANCE_PROFILING 0
 #define LOG(x) Serial.println(x)
 
-
 #define FPS30 33333
 #define FPS60 16667
 #define FPS90 11111
 #define FPS120 8333
 #define FPS144 6944
+#define FPS_UNCAPPED 0
 
 #if PERFORMANCE_PROFILING
     #define INSTRUMENTATE(ui) Instrumentator timer(ui, __PRETTY_FUNCTION__);
@@ -143,10 +143,8 @@ namespace SimpleUI{
     void focusScene(Scene* scene);
   };
 
-  struct FocusingSettings{
-    unsigned int max_distance;
-    Quality accuracy;
-  };
+  
+
 
   struct Outline{
     unsigned int thickness; 
@@ -166,24 +164,24 @@ namespace SimpleUI{
   //Generic UI element, all interactable elements inherit from this
   class UIElement{
     public:
+      
 
       Constraint scale_constraint;
-      bool focusable;
       Animation anim;
-      const ElementType type;
       FocusStyle focus_style;
       Outline focus_outline;
-      bool draw;          //If true, the element is drawn, if false it's kept hidden.
+
+      bool custom_focus_outline = false;
+      bool focusable = true;
+      bool draw = true;          //If true, the element is drawn, if false it's kept hidden.
 
     public:
       friend class UI;
       friend class Scene;
-      UIElement(unsigned int w=0, unsigned int h=0, Point pos={0,0}, bool isCentered = false, ElementType element = ElementType::UIElement, FocusStyle style = FocusStyle::None)
-      : type(element), m_width(w), m_height(h), focus_style(style), m_UUID(UUIDbuddy::generateUUID()),
-        focusable(true), draw(true), scale_constraint(Constraint::TopLeft)
+      UIElement(unsigned int w=0, unsigned int h=0, Point pos={0,0}, bool isCentered = false, ElementType element = ElementType::UIElement, Constraint constraint = Constraint::TopLeft, FocusStyle style = FocusStyle::None)
+      : m_type(element), m_width(w), m_height(h), focus_style(style), m_UUID(UUIDbuddy::generateUUID()), m_s_width(w), m_s_height(h), scale_constraint(constraint)
         {
           m_position = isCentered ? centerToCornerPos(pos.x, pos.y, w, h) : pos;
-          scale_constraint = Constraint::Center;
         };
 
       virtual ~UIElement(){};
@@ -201,6 +199,7 @@ namespace SimpleUI{
 
       //!@return The element's UUID
       inline std::string getId() const { return m_UUID; }
+      inline ElementType getType() const { return m_type; }
       inline Point getPos() const { return m_position; }
       inline unsigned int getWidth() const { return m_width; }
       inline unsigned int getHeight() const { return m_height; }
@@ -218,22 +217,23 @@ namespace SimpleUI{
       inline bool isFocused() const;
       
       static Point centerToCornerPos(unsigned int x_pos, unsigned int y_pos, unsigned int w, unsigned int h);
-      void drawFocusOutline() const;
+      void drawFocusOutline(const Outline& outline = Outline()) const;
 
       protected:
       Point m_position;
       bool m_overrideAnimationScaling = false;
       unsigned int m_width, m_height;
       unsigned int m_s_width, m_s_height; //With scaling applied
-      const std::string m_UUID;
+      std::string m_UUID;
+      ElementType m_type;
       UI* m_parent_ui;
   };
 
   //Used to represent any Image with the tools provided by the library
   class UIImage : public UIElement{
   public:
-    UIImage(Texture &img, Point pos, bool isCentered, FocusStyle focus_style = FocusStyle::None)
-    : UIElement(img.width, img.height, pos, isCentered, ElementType::UIImage, focus_style), m_body(&img), m_mono_color(0xffff), m_scale_fac(1.0f){}
+    UIImage(Texture* img = nullptr, Point pos = {0,0}, bool isCentered=false, FocusStyle focus_style = FocusStyle::None)
+    : UIElement(img->width, img->height, pos, isCentered, ElementType::UIImage, Constraint::TopLeft, focus_style), m_body(img), m_mono_color(0xffff), m_scale_fac(1.0f){}
 
     inline void setScale(float scale){m_scale_fac = scale;
                                       m_overrideAnimationScaling = (scale < 0) ? false : true;}
@@ -257,11 +257,12 @@ namespace SimpleUI{
   class AnimatedApp : public UIElement{
     public:
 
-      AnimatedApp(Texture& unfocused, Texture& focused, Point pos = {0,0}, bool isCentered = false, 
+      AnimatedApp(Texture* unfocused = nullptr, Texture* focused = nullptr, Point pos = {0,0}, bool isCentered = false, 
                   unsigned int duration = 1000U, Interpolation func = Interpolation::Linear, Constraint constraint = Constraint::TopLeft):
 
-        UIElement(unfocused.width, unfocused.height, pos, isCentered, ElementType::AnimatedApp, FocusStyle::Animation), m_mono_color(0xffff), m_unselected(&unfocused), 
-        m_selected(&focused), m_showing(m_unselected), m_ratio(static_cast<float>(focused.width) / static_cast<float>(unfocused.width)), m_duration(duration), m_func(func)
+        UIElement(unfocused ? unfocused->width : 0, unfocused ? unfocused->height : 0, pos, isCentered, ElementType::AnimatedApp, constraint, FocusStyle::Animation),
+        m_mono_color(0xffff), m_unselected(unfocused), m_selected(focused), m_showing(m_unselected), 
+        m_ratio(unfocused&&focused ? static_cast<float>(focused->width) / static_cast<float>(unfocused->width) : 0.0f), m_duration(duration), m_func(func)
       {
         anim = Animation(1.0f, m_ratio, duration, func);
         anim.Start();
@@ -275,7 +276,8 @@ namespace SimpleUI{
         m_onClick();
       }
       void bind(const std::function<void()>& func){m_onClick = func;}
-
+      
+      
     protected:
       void m_computeAnimation();
       std::function<void()> m_onClick = [](){return;};
@@ -307,8 +309,8 @@ namespace SimpleUI{
       @param isCentered   Is the element centered around the provided coordinates?
       @param focus_style  What method is used to signal a focus
   */
-    Checkbox(Outline style, Point pos, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline)
-      :UIElement(width, height, pos, isCentered, ElementType::Checkbox, focus_style), outline(style), selection_color(fillColor), m_state(false){
+    Checkbox(Outline style = Outline(), Point pos = {0, 0}, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline)
+      :UIElement(width, height, pos, isCentered, ElementType::Checkbox, Constraint::TopLeft, focus_style), outline(style), selection_color(fillColor), m_state(false){
         focus_outline.border_distance=0U;
         outline.radius = std::clamp(outline.radius, 0U, static_cast<unsigned int>((width >= height ? height : width)*0.5f));
       };
@@ -323,6 +325,9 @@ namespace SimpleUI{
     bool m_state;
   };
 
+
+  
+
   //This is one of the most fundamental blocks of the library, it groups together elements and allows for extreme versatility
   class Scene{
     friend class UI;
@@ -332,11 +337,33 @@ namespace SimpleUI{
     std::unordered_map<std::string, UIElement*> elements;
     std::vector<Scene*> parents;
 
+    struct SceneSettings
+    {
+      struct FocusingSettings
+      {
+        unsigned int max_distance;
+        Quality accuracy;
+        FocusingAlgorithm algorithm;
+        Outline outline;
+      }
+      focus{64U, Quality::Medium, FocusingAlgorithm::Linear};
+
+        //Add more stuff here
+      bool scriptOnTop = false;
+    } 
+    settings;
+
     public:
-    Scene(std::vector<UIElement*> elementGroup, UIElement* first_focus);
+    Scene(std::initializer_list<UIElement*> elementGroup = {}, UIElement* first_focus = nullptr);
+    Scene(const std::function<void()>& script, bool on_top = false) : m_script(script), primaryElementID(""){ settings.scriptOnTop=on_top; }
     void renderScene() const;
     UIElement* getElementByUUID(std::string UUID) const;
     void addParents(std::initializer_list<Scene*> scenes);
+    inline void Script(const std::function<void()>& script, bool on_top = false)  { m_script = script; settings.scriptOnTop = on_top;}
+    inline void UnbindScript(){ m_script = [](){return;};}
+
+    private:
+    std::function<void()> m_script = [](){return;};
   };
 
   /*This is the object that has the power over the final frame, this reads inputs, handles focusing, and is responsible for calling the rendering
@@ -345,18 +372,17 @@ namespace SimpleUI{
     public:
     Focus focus;
     std::vector<Scene*> scenes;
-    FocusingSettings focusingSettings{64, Quality::Medium};
     GFXcanvas16 *buffer;
     
     
     public:
-    UI(Scene& first_scene, GFXcanvas16& framebuffer);
-    void AddScene(Scene& scene);
+    UI(Scene* first_scene = nullptr, GFXcanvas16* framebuffer = nullptr);
+    void AddScene(Scene* scene);
     void FocusScene(Scene* scene);
     inline const Scene* getActiveScene() const { return focus.activeScene; }
     void Render();
-    void FocusDirection(unsigned int direction, FocusingAlgorithm alg);
-    void FocusDirection(Direction direction, FocusingAlgorithm alg);
+    void FocusDirection(unsigned int direction);
+    void FocusDirection(Direction direction);
     void Back();
     void Click();
     inline bool isFocusingFree() const { return !m_focusing_busy; }
@@ -396,7 +422,7 @@ namespace SimpleUI{
     
     Point polarToCartesian(const float radius, const float angle);
     bool isPointInElement(Point point, UIElement* element);
-    UIElement* SignedDistance(const unsigned int direction, const FocusingSettings& settings, const FocusingAlgorithm& alg, Scene* scene, UIElement* focused);
+    UIElement* SignedDistance(const unsigned int direction, Scene* scene, UIElement* focused);
     UIElement* findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone);
     UIElement* findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray);
 
