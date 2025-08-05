@@ -3,10 +3,10 @@
 #include <Adafruit_ST7735.h>
 #include <SPI.h>
 #include <images/home_images.h>
-#include <images/nicerlandscape.h>
 #include <SimpleUI.h>
 #include <HardwareAid.h>
 #include <Animation.h>
+#include "images/splash_screen.h"
 
 #define SDA 21
 #define SCL 22
@@ -42,14 +42,14 @@ Texture smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_s
 AnimatedApp play    (&smallPlayTest, &playTest,     {64, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
 AnimatedApp settings(&smallSettings, &largeSettings,{25, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
 AnimatedApp gallery (&smallGallery , &largeGallery, {103, 32}, true, 80U, Interpolation::Sinusoidal, Constraint::Center);
-Scene home({&play, &settings, &gallery}, &play);
+Scene home({&play, &settings, &gallery}, nullptr);
 
 Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5}, 16, 16, 0xFFFF);
 Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5}, 16, 16, 0xFFFF);
 Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5}, 16, 16, 0xFFFF);
 Scene test({&check1, &check2, &check3}, &check1);
-
 UI ui(&home, &canvas);
+
 //--------------------------UI SETUP-----------------------------//
 
 TaskHandle_t serialComms;
@@ -84,12 +84,13 @@ void handleComms( void *pvParameters){
       {
         UIElement *obj = ui.getFocused();
         Serial.printf("ID: %s\n", ui.focus.focusedElementID.c_str());
+        Serial.printf("Position: (%d, %d)\n", obj->getPos().x, obj->getPos().y);
         switch(obj->anim.getState()){
           case AnimState::Start: Serial.println("AnimState: Start"); break;
           case AnimState::Running: Serial.println("AnimState: Running"); break;
           case AnimState::Finished: Serial.println("AnimState: Finished"); break;
         }
-        Serial.printf("Reverse: %s\n", obj->anim.getDirection() ? "true" : "false");
+        Serial.printf("Direction: %s\n", obj->anim.getDirection() ? "Forward" : "Reverse");
         Serial.printf("Draw: %s\n", obj->draw ? "true" : "false");
         if(obj->getType() == ElementType::UIElement)
           Serial.println("Type: UIElement");
@@ -99,6 +100,14 @@ void handleComms( void *pvParameters){
           Serial.println("Type: Checkbox");
         else 
           Serial.println("Type: AnimatedApp");
+        Serial.printf("Focusable: %s\n", obj->focusable ? "true" : "false");
+        Serial.printf("Custom outline: %s\n", obj->custom_focus_outline ? "true" : "false");
+        Serial.printf("Constraint: %s\n", UiUtils::constraintToString(obj->scale_constraint).c_str());
+        Serial.println("----Scene----");
+        Serial.printf("Max focusing distance: %d\n", ui.getActiveScene()->settings.focus.max_distance);
+        Serial.printf("Focusing algorithm: %s\n", ui.getActiveScene()->settings.focus.algorithm == FocusingAlgorithm::Linear ? "Linear" : "Cone");
+        Serial.printf("Focusing accuracy: %s\n", ui.getActiveScene()->settings.focus.accuracy == Quality::Low ? "Low" : ui.getActiveScene()->settings.focus.accuracy == Quality::Medium ? "Medium" : "High");
+        Serial.printf("Script on top: %s\n", ui.getActiveScene()->settings.scriptOnTop ? "true" : "false");
       }
       else if (input == "perfstats")
       {
@@ -125,8 +134,7 @@ uint32_t calcStart = micros(), lastFrame = micros(), deltaTime = 0;
 
 //-------------SETTINGS----------------//
 bool render_frametime = true;
-int frameWait=0;
-unsigned int fpsTarget = FPS_UNCAPPED;
+unsigned int fpsTarget = FPS90;
 unsigned int calculationsTime=0;
 uint16_t debugColor = hex("#ff8e00");
 
@@ -144,7 +152,12 @@ auto testSceneScript = [&](){
 };
 
 //-------------SETTINGS----------------//
-
+inline __attribute__((always_inline))
+void blit()
+{
+  tft.setAddrWindow(0, 0, 128, 64);
+  tft.writePixels(canvas.getBuffer(), 8192, false);
+}
 void framerate(bool render){
   if(render){
     canvas.setCursor(0,50);
@@ -168,40 +181,40 @@ void computeTime(bool render){
 }
 void initLCD(){
   pinMode(BACKLIGHT, OUTPUT);
-  analogWrite(BACKLIGHT, 50);
-  Serial.begin(115200);
+  analogWrite(BACKLIGHT, 0);
   spi.begin(SCL, -1, SDA, -1);
   tft.initR(INITR_GREENTAB);
-  tft.setSPISpeed(78000000); //Absolute fastest speed tested, errors at 80000000
-  tft.fillScreen(ST7735_BLACK);
+  //tft.setSPISpeed(75000000); //Absolute fastest speed tested, errors at 80000000
+  canvas.fillScreen(ST7735_BLACK);
+  blit();
+  delay(10);
+  Point pos = UIElement::centerToCornerPos(64, 32, 28, 30);
+  tft.drawBitmap(pos.x, pos.y, splash_logo, 28, 30, 0xffff);
+
+  Serial.begin(115200);
+  analogWrite(BACKLIGHT, 50);
 }
 
-inline __attribute__((always_inline))
-void blit()
-{
-  tft.setAddrWindow(0, 0, 128, 64);
-  tft.writePixels(canvas.getBuffer(), 8192, false);
-}
+
 
 
 void setup() {
-  setupButtons(buttons);
+
   initLCD();
+
+  setupButtons(buttons);
 
   xTaskCreatePinnedToCore(handleComms, "Comms", 2000, NULL, 1, &serialComms, 0);
 
-
   home.settings.focus.outline = Outline(2, 2, 3);
   test.settings.focus.outline = Outline(1, 1, 7, hex("#6b6b6b"));
-
-
   ui.AddScene(&test);
   play.bind(loadTest);
   test.addParents({&home});
-
-
   test.Script(testSceneScript, true);
   myAnimation.setLoop(true);
+
+  delay(1000);
 }
 
 
@@ -238,7 +251,7 @@ void loop() {
     blit(); //RENDER THE FRAME
 
     //TEMPORAL VARIABLES AND FUNCTIONS
-    rememberButtons(buttons);
-
+    
   }
+  rememberButtons(buttons);
 }

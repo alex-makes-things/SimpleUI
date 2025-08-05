@@ -343,18 +343,25 @@ void AnimatedApp::render(){
 
 //--------------------UI CLASS---------------------------------------------------------------//
 
-  UI::UI(Scene* first_scene, GFXcanvas16* framebuffer) : focus(Focus(first_scene->primaryElementID)), buffer(framebuffer)
+  UI::UI(Scene* first_scene, GFXcanvas16* framebuffer)
   {
-    AddScene(first_scene);
-    focus.focusScene(first_scene);
+    if (first_scene && framebuffer){
+      buffer = framebuffer;
+      focus = Focus(first_scene->primaryElementID);
+      AddScene(first_scene);
+      focus.focusScene(first_scene);
+    }
   }
 
   void UI::AddScene(Scene* scene){
-      scenes.push_back(scene);                 //KEEP IN MIND "REALLOCATES"
-      for(const auto&[id, element] : scene->elements){
-        element->setUiListener(this);
-      }
+
+    scenes.push_back(scene);                 //KEEP IN MIND "REALLOCATES"
+    scene->m_parent_ui = this;
+    for(const auto&[id, element] : scene->elements){
+      element->setUiListener(this);
     }
+    
+  }
 
   void UI::FocusScene(Scene* scene){
       focus.focusScene(scene);
@@ -385,7 +392,7 @@ void AnimatedApp::render(){
   /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
   void UI::FocusDirection(unsigned int direction){
     INSTRUMENTATE(this)
-    m_focusDir(direction, focus.activeScene->settings.focus.algorithm);
+    m_focusDir(direction);
   }
 
   /// @brief Focus the closest object in any direction
@@ -393,15 +400,16 @@ void AnimatedApp::render(){
   /// @param alg The focusing algorithm that you want to use (FocusingAlgorithm::Linear, FocusingAlgorithm::Cone)
   void UI::FocusDirection(Direction direction){
     INSTRUMENTATE(this)
-    m_focusDir(static_cast<unsigned int>(direction), focus.activeScene->settings.focus.algorithm);
+    m_focusDir(static_cast<unsigned int>(direction));
   }
 
   void UI::Render(){
-    focus.activeScene->renderScene();
+    if (focus.activeScene)
+      focus.activeScene->renderScene();
     m_updateFocus();
   }
 
-  void UI::m_focusDir(unsigned int direction, FocusingAlgorithm alg){
+  void UI::m_focusDir(unsigned int direction){
     if(isFocusingFree()){
       m_focusing_busy = true;
 
@@ -409,7 +417,10 @@ void AnimatedApp::render(){
       if (focus.activeScene->elements.empty())
         return;
       else
-        next_element = UiUtils::SignedDistance(direction, focus.activeScene, focus.activeScene->getElementByUUID(focus.focusedElementID));
+        if (!focus.focusedElementID.empty())
+          next_element = UiUtils::SignedDistance(direction, focus.activeScene, focus.activeScene->getElementByUUID(focus.focusedElementID));
+        else
+          next_element = UiUtils::SignedDistance(direction, focus.activeScene, nullptr);
 
       if (next_element){
         focus.focus(next_element->getId());
@@ -467,25 +478,31 @@ void AnimatedApp::render(){
       Scene::SceneSettings::FocusingSettings& settings = scene->settings.focus;
       INSTRUMENTATE(focused->getParentUI())
       if (scene->elements.empty()){
-        Serial.println("DEBUG");
         return nullptr;
       }
+
       if (settings.algorithm == FocusingAlgorithm::Linear)
       {
         Ray ray{settings.max_distance, 1, direction};
-        switch (settings.accuracy)
-        {
-        case Quality::Low:
-          ray.step = 4;
-          break;
-        case Quality::Medium:
-          ray.step = 2;
-          break;
-        case Quality::High:
-          ray.step = 1;
-          break;
+        switch (settings.accuracy){
+          case Quality::Low:
+            ray.step = 4;
+            break;
+          case Quality::Medium:
+            ray.step = 2;
+            break;
+          case Quality::High:
+            ray.step = 1;
+            break;
         }
-        return findElementInRay(focused, scene, ray);
+
+        if (focused)
+          return findElementInRay(focused, scene, ray);
+        else{
+          UIElement temp(10, 10, {static_cast<int>(scene->m_parent_ui->buffer->width()*0.5), static_cast<int>(scene->m_parent_ui->buffer->height()*0.5)}, true);
+          UIElement* result = findElementInRay(&temp, scene, ray);
+          return result;
+        }
       }
 
       else  //IF THE METHOD IS CONE
@@ -505,7 +522,13 @@ void AnimatedApp::render(){
             cone.rad_step = 2;
             break;
           }
-        return findElementInCone(focused, scene, cone);
+        if (focused)
+          return findElementInCone(focused, scene, cone);
+        else{
+          UIElement temp(10, 10, {static_cast<int>(scene->m_parent_ui->buffer->width()*0.5), static_cast<int>(scene->m_parent_ui->buffer->height()*0.5)}, true);
+          UIElement* result = findElementInCone(&temp, scene, cone);
+          return result;
+        }
       }
 
       return nullptr;
@@ -515,7 +538,6 @@ void AnimatedApp::render(){
       return Point(radius * cos(-angle * degToRadCoefficient), //x
                   radius * sin(-angle * degToRadCoefficient));//y
     }
-
     std::set<Point> computeConePoints(Point vertex, Cone cone){
       std::set<Point> buffer;
 
@@ -541,7 +563,6 @@ void AnimatedApp::render(){
       const int starting_angle = cone.bisector - half_aperture;
       const int end_angle = cone.bisector + half_aperture;
       const Point centerPoint = focused->getCenterPoint();
-
 
       Point tempPoint;
       for (int i = starting_angle; i < end_angle; i += cone.aperture_step)
@@ -579,6 +600,21 @@ void AnimatedApp::render(){
       }
       focused->focusable = true;
       return nullptr;
+    }
+
+    const std::string constraintToString(const Constraint constraint){
+      switch (constraint){
+        case Constraint::TopLeft:     return "TopLeft";
+        case Constraint::Top:         return "Top";
+        case Constraint::TopRight:    return "TopRight";
+        case Constraint::Left:        return "Left";
+        case Constraint::Center:      return "Center";
+        case Constraint::Right:       return "Right";
+        case Constraint::BottomLeft:  return "BottomLeft";
+        case Constraint::Bottom:      return "Bottom";
+        case Constraint::BottomRight: return "BottomRight";
+      }
+      return "Error";
     }
   };
 };

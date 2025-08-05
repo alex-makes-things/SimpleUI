@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <Adafruit_GFX.h>
 #include <set>
+#include <queue>
 #include <functional>
 
 #define PERFORMANCE_PROFILING 0
@@ -143,9 +144,6 @@ namespace SimpleUI{
     void focusScene(Scene* scene);
   };
 
-  
-
-
   struct Outline{
     unsigned int thickness; 
     unsigned int border_distance;
@@ -165,7 +163,6 @@ namespace SimpleUI{
   class UIElement{
     public:
       
-
       Constraint scale_constraint;
       Animation anim;
       FocusStyle focus_style;
@@ -176,8 +173,7 @@ namespace SimpleUI{
       bool draw = true;          //If true, the element is drawn, if false it's kept hidden.
 
     public:
-      friend class UI;
-      friend class Scene;
+
       UIElement(unsigned int w=0, unsigned int h=0, Point pos={0,0}, bool isCentered = false, ElementType element = ElementType::UIElement, Constraint constraint = Constraint::TopLeft, FocusStyle style = FocusStyle::None)
       : m_type(element), m_width(w), m_height(h), focus_style(style), m_UUID(UUIDbuddy::generateUUID()), m_s_width(w), m_s_height(h), scale_constraint(constraint)
         {
@@ -325,12 +321,25 @@ namespace SimpleUI{
     bool m_state;
   };
 
+  namespace UiUtils{
+      constexpr float degToRadCoefficient = 0.01745329251;
+      const Point centerPos(int x_pos, int y_pos, const unsigned int w, const unsigned int h);
+      
+      Point polarToCartesian(const float radius, const float angle);
+      bool isPointInElement(Point point, UIElement* element);
+      UIElement* SignedDistance(const unsigned int direction, Scene* scene, UIElement* focused);
+      UIElement* findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone);
+      UIElement* findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray);
+      const std::string constraintToString(const Constraint constraint);
 
+      std::set<Point> computeConePoints(Point vertex, Cone cone);
+    }
   
 
   //This is one of the most fundamental blocks of the library, it groups together elements and allows for extreme versatility
   class Scene{
     friend class UI;
+    friend UIElement* UiUtils::SignedDistance(const unsigned int direction, Scene* scene, UIElement* focused);
     public:
     std::string name;
     std::string primaryElementID;
@@ -361,8 +370,9 @@ namespace SimpleUI{
     void addParents(std::initializer_list<Scene*> scenes);
     inline void Script(const std::function<void()>& script, bool on_top = false)  { m_script = script; settings.scriptOnTop = on_top;}
     inline void UnbindScript(){ m_script = [](){return;};}
-
+    
     private:
+    UI* m_parent_ui;
     std::function<void()> m_script = [](){return;};
   };
 
@@ -395,10 +405,9 @@ namespace SimpleUI{
     void m_addPerf(std::string key, uint32_t time);
     friend class Instrumentator;
     #endif
-    
-    
+
     private:
-    void m_focusDir(unsigned int direction, FocusingAlgorithm alg);
+    void m_focusDir(unsigned int direction);
     void m_updateFocus();
     bool m_focusing_busy = false; //You could see this as sort of a "mutex" to prevent multiple focuses from happening in the same cycle, which could break a UI
   };
@@ -416,16 +425,5 @@ namespace SimpleUI{
   };
   #endif
 
-  namespace UiUtils{
-    constexpr float degToRadCoefficient = 0.01745329251;
-    const Point centerPos(int x_pos, int y_pos, const unsigned int w, const unsigned int h);
-    
-    Point polarToCartesian(const float radius, const float angle);
-    bool isPointInElement(Point point, UIElement* element);
-    UIElement* SignedDistance(const unsigned int direction, Scene* scene, UIElement* focused);
-    UIElement* findElementInCone(UIElement* focused, Scene* currentScene, const Cone& cone);
-    UIElement* findElementInRay(UIElement* focused, Scene* currentScene, const Ray& ray);
-
-    std::set<Point> computeConePoints(Point vertex, Cone cone);
-  }
+  
 }
