@@ -39,14 +39,14 @@ Texture largeSettings(HOME_LARGE_SETTINGS_SIZE, HOME_LARGE_SETTINGS_SIZE, home_l
 Texture smallSettings(HOME_SMALL_SETTINGS_SIZE, HOME_SMALL_SETTINGS_SIZE, home_small_settings);
 
 
-AnimatedApp play    (&smallPlayTest, &playTest,     {64, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
-AnimatedApp settings(&smallSettings, &largeSettings,{25, 32},  true, 80U, Interpolation::Sinusoidal, Constraint::Center);
-AnimatedApp gallery (&smallGallery , &largeGallery, {103, 32}, true, 80U, Interpolation::Sinusoidal, Constraint::Center);
+AnimatedApp play    ({64, 32},  true, &smallPlayTest, &playTest,      Constraint::Center, 80U, 2.5f);
+AnimatedApp settings({25, 32},  true, &smallSettings, &largeSettings, Constraint::Center, 80U, 2.5f);
+AnimatedApp gallery ({103, 32}, true, &smallGallery , &largeGallery,  Constraint::Center, 80U, 2.5f);
 Scene home({&play, &settings, &gallery}, nullptr);
 
-Checkbox check1(Outline(2, 2, 5, 0xFFFF), {0 ,5}, 16, 16, 0xFFFF);
-Checkbox check2(Outline(2, 2, 5, 0xFFFF), {20,5}, 16, 16, 0xFFFF);
-Checkbox check3(Outline(2, 2, 5, 0xFFFF), {40,5}, 16, 16, 0xFFFF);
+Checkbox check1({44, 32}, true, 16, 16, Outline(2, 2, 7, 0xFFFF), 0xFFFF);
+Checkbox check2({64, 32}, true, 16, 16, Outline(2, 2, 7, 0xFFFF), 0xFFFF);
+Checkbox check3({84, 32}, true, 16, 16, Outline(2, 2, 7, 0xFFFF), 0xFFFF);
 Scene test({&check1, &check2, &check3}, &check1);
 UI ui(&home, &canvas);
 
@@ -127,7 +127,7 @@ void handleComms( void *pvParameters){
 }
 
 
-Animation myAnimation(118.0f, 0.0f, 1000U, Interpolation::Sinusoidal);
+Animation myAnimation(0.0f, 118.0f, 1000U, 2.4f);
 uint32_t calcStart = micros(), lastFrame = micros(), deltaTime = 0;
 
 
@@ -142,13 +142,23 @@ auto loadTest = [&](){
   ui.FocusScene(&test);
   myAnimation.Reset();
   myAnimation.Start();
+
 };
 
 auto testSceneScript = [&](){
-  canvas.fillRect(int(myAnimation.getProgress()), 0, 10, 10, ST7735_ORANGE);
+  static uint8_t count=1;
+  canvas.fillRect(round(myAnimation.getProgress()), 0, 10, 10, ST7735_ORANGE);
+  canvas.fillRect(56, 8, 16, 16, ST7735_ORANGE);
   myAnimation.Update();
-    if(myAnimation == AnimState::Finished)
+    if(myAnimation == AnimState::Finished){
+      count++;
       myAnimation.Flip();
+      myAnimation.Reset();
+      if (count==2){
+        test.settings.scriptOnTop = !test.settings.scriptOnTop;
+        count = 0;
+      }
+    }
 };
 
 //-------------SETTINGS----------------//
@@ -212,8 +222,6 @@ void setup() {
   play.bind(loadTest);
   test.addParents({&home});
   test.Script(testSceneScript, true);
-  myAnimation.setLoop(true);
-
   delay(1000);
 }
 

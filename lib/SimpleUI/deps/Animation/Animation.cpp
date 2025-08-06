@@ -3,6 +3,11 @@
 
 namespace SimpleUI{
 
+    float Animation::smoothStep(const float x, const float k){
+        float xk = std::pow(x, k);
+        return xk / (xk + std::pow(1-x, k));
+    }
+
     void Animation::Start(){
         m_enable = true;
         m_startTime = micros();
@@ -28,11 +33,6 @@ namespace SimpleUI{
         m_startTime = m_now - m_elapsed;
     }
 
-    void Animation::setFunc(Interpolation function){
-        assert(function != Interpolation::CubicBezier && "Cubic-Bezier has not been implemented yet.");
-        m_interpolation = function;
-    }
-
     const AnimState Animation::getState() const {
         if (fabs(m_progress - m_end) <= EPSILON || m_state == AnimState::Finished)
             return AnimState::Finished;
@@ -52,19 +52,23 @@ namespace SimpleUI{
                 m_elapsed = m_now - m_startTime;
 
                 m_T = normalize(static_cast<float>(m_elapsed), 0, m_length);
-
-                if(m_interpolation == Interpolation::Sinusoidal) 
-                    m_T = static_cast<float>(0.5*sin(m_T*M_PI-M_PI_2)+0.5);
-                
                 m_T = std::clamp(m_T, 0.0f, 1.0f);
 
-                m_progress = lerp(m_start, m_end, m_T);
+                /*
+                if(func == Interpolation::Sinusoidal) 
+                    m_T = static_cast<float>(0.5*sin(m_T*M_PI-M_PI_2)+0.5);
+                else if (func == Interpolation::SmoothStep)
+                    m_T = smoothStep(m_T, smoothstep);
+                */
+                m_T = smoothStep(m_T, factor);
+
+                m_progress = Animation::clamp(lerp(m_start, m_end, m_T), m_start, m_end);
 
 
                 m_state = m_elapsed >= m_length ? AnimState::Finished : AnimState::Running;
             }
             else{
-                if (m_loop)
+                if (loop)
                     Reset();
             }
         }

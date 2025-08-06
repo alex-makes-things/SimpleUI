@@ -182,8 +182,6 @@ namespace SimpleUI{
 
       virtual ~UIElement(){};
 
-      void InitAnim(float initial, float final, unsigned int duration){anim = Animation(initial, final, duration);}
-
       inline void setPosX(unsigned int X) { m_position.x = X; }
       inline void setPosY(unsigned int Y) { m_position.y = Y; }
       inline void setPos(Point pos){m_position=pos;}
@@ -253,14 +251,14 @@ namespace SimpleUI{
   class AnimatedApp : public UIElement{
     public:
 
-      AnimatedApp(Texture* unfocused = nullptr, Texture* focused = nullptr, Point pos = {0,0}, bool isCentered = false, 
-                  unsigned int duration = 1000U, Interpolation func = Interpolation::Linear, Constraint constraint = Constraint::TopLeft):
+      AnimatedApp(Point pos = {0,0}, bool isCentered = false, Texture* unfocused = nullptr, Texture* focused = nullptr, Constraint constraint = Constraint::TopLeft, 
+                  unsigned int duration = 250U, float step = 1.0f):
 
         UIElement(unfocused ? unfocused->width : 0, unfocused ? unfocused->height : 0, pos, isCentered, ElementType::AnimatedApp, constraint, FocusStyle::Animation),
-        m_mono_color(0xffff), m_unselected(unfocused), m_selected(focused), m_showing(m_unselected), 
-        m_ratio(unfocused&&focused ? static_cast<float>(focused->width) / static_cast<float>(unfocused->width) : 0.0f), m_duration(duration), m_func(func)
+        m_mono_color(0xffff), m_unselected(unfocused), m_selected(focused), m_showing(m_unselected), m_duration(duration),
+        m_ratio(unfocused&&focused ? static_cast<float>(focused->width) / static_cast<float>(unfocused->width) : 0.0f)
       {
-        anim = Animation(1.0f, m_ratio, duration, func);
+        anim = Animation(1.0f, m_ratio, duration, step);
         anim.Start();
         anim.Pause();
       }
@@ -278,7 +276,6 @@ namespace SimpleUI{
       void m_computeAnimation();
       std::function<void()> m_onClick = [](){return;};
     protected:
-      Interpolation m_func;
       unsigned int m_duration;
       uint16_t m_mono_color;  //Color used to draw the textures
       Texture* m_unselected;  //This points to the image that is displayed when the element is unfocused
@@ -305,8 +302,8 @@ namespace SimpleUI{
       @param isCentered   Is the element centered around the provided coordinates?
       @param focus_style  What method is used to signal a focus
   */
-    Checkbox(Outline style = Outline(), Point pos = {0, 0}, unsigned int width=0, unsigned int height=0, uint16_t fillColor=0xFFFF, bool isCentered=false, FocusStyle focus_style=FocusStyle::Outline)
-      :UIElement(width, height, pos, isCentered, ElementType::Checkbox, Constraint::TopLeft, focus_style), outline(style), selection_color(fillColor), m_state(false){
+    Checkbox(Point pos = {0, 0}, bool isCentered=false, unsigned int width=0, unsigned int height=0, Outline style = Outline(),  uint16_t fillColor=0xFFFF, FocusStyle focus_style=FocusStyle::Outline)
+      :UIElement(width, height, pos, isCentered, ElementType::Checkbox, Constraint::TopLeft, focus_style), outline(style), selection_color(fillColor){
         focus_outline.border_distance=0U;
         outline.radius = std::clamp(outline.radius, 0U, static_cast<unsigned int>((width >= height ? height : width)*0.5f));
       };
@@ -318,7 +315,7 @@ namespace SimpleUI{
     protected:
     void m_drawCheckboxOutline() const;
     protected:
-    bool m_state;
+    bool m_state = false;
   };
 
   namespace UiUtils{

@@ -184,7 +184,7 @@ namespace SimpleUI{
         else if (m_parent_ui->focus.hasChanged() && m_showing == m_selected)
         { //If the element has just been unfocused and has previously completed the focusing animation, start the unfocusing
           m_showing = m_unselected;
-          anim = Animation(m_ratio, 1.0f, m_duration, m_func);
+          anim = Animation(m_ratio, 1.0f, m_duration, anim.factor);
           anim.Start();
         }
         break;
@@ -212,12 +212,12 @@ namespace SimpleUI{
             }
             else
             { //Fixes bug that causes the unfocused icon to stay big while it isn't focused
-              anim = Animation(m_ratio, 1.0f, m_duration, m_func);
+              anim = Animation(m_ratio, 1.0f, m_duration, anim.factor);
               anim.Start();
             }
           }
           else { //Reset the animation for it to be resumed with the correct parameters
-            anim = Animation(1.0f, m_ratio, m_duration, m_func);
+            anim = Animation(1.0f, m_ratio, m_duration, anim.factor);
           }
         }
         break;
@@ -254,11 +254,18 @@ void AnimatedApp::render(){
     Point rect_drawing_pos = getDrawPoint();
 
     if(outline.radius!=0){
-      int16_t draw_radius = outline.radius+outline.thickness;
+      int16_t initial_radius = outline.radius;
+      int16_t final_radius = outline.radius - outline.thickness;
+      if (final_radius < 0)
+        final_radius = 0;
+      int16_t rad_diff = initial_radius - final_radius;
+      float step = rad_diff / outline.thickness;
+      float draw_radius = outline.radius;
+
       for (int i = outline.thickness; i > 0 ; i--) {
-        m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, draw_radius, outline.color);
+        m_parent_ui->buffer->drawRoundRect(rect_drawing_pos.x, rect_drawing_pos.y, draw_width, draw_height, round(draw_radius), outline.color);
         if (!(i % 2)){
-          int16_t temp_r = draw_radius + 1;
+          int16_t temp_r = round(draw_radius) + 1;
           m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + temp_r, rect_drawing_pos.y + temp_r, temp_r, 1, outline.color);
           m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + temp_r, temp_r, 2, outline.color);
           m_parent_ui->buffer->drawCircleHelper(rect_drawing_pos.x + draw_width - temp_r - 1, rect_drawing_pos.y + draw_height - temp_r - 1, temp_r, 4, outline.color);
@@ -268,7 +275,7 @@ void AnimatedApp::render(){
         draw_width -= 2;
         draw_height -= 2; 
         rect_drawing_pos++;
-        draw_radius--;
+        draw_radius -= step;
       }
     }
     else{
@@ -290,7 +297,11 @@ void AnimatedApp::render(){
       fill_pos += (outline.border_distance+outline.thickness);
       const unsigned int offset=outline.border_distance*4;
       if(outline.radius!=0){
-        m_parent_ui->buffer->fillRoundRect(fill_pos.x, fill_pos.y, m_width-offset, m_height-offset, outline.radius-outline.border_distance, selection_color);
+        int16_t radius = outline.radius-outline.border_distance-2;
+        if (radius < 0)
+          radius = 0;
+  
+        m_parent_ui->buffer->fillRoundRect(fill_pos.x, fill_pos.y, m_width-offset, m_height-offset, radius, selection_color);
       }
       else{
         m_parent_ui->buffer->fillRect(fill_pos.x, fill_pos.y, m_width-offset, m_height-offset, selection_color);
